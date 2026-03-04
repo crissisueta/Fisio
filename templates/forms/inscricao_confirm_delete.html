@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Deletar - Ficha de Inscrição{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>Deletar Ficha de Inscrição</h1>
+    </div>
+</div>
+
+<div class="card border-danger">
+    <div class="card-body">
+        <p class="text-danger">Tem certeza que deseja deletar a ficha de <strong>{{ object.nome }}</strong>?</p>
+        <p class="text-muted">Esta ação não pode ser desfeita.</p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-grid gap-2 d-sm-flex justify-content-center">
+                <button type="submit" class="btn btn-danger">Deletar</button>
+                <a href="{% url 'inscricao-list' %}" class="btn btn-secondary">❌ Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Sistema de Gestão de Fichas{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-4">Dashboard</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Inscrições</h5>
+                <p class="card-text fs-4">{{ inscricoes_count }}</p>
+                <a href="{% url 'inscricao-list' %}" class="btn btn-primary btn-sm">Ver Tudo</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Anamneses Gerais</h5>
+                <p class="card-text fs-4">{{ anamneses_count }}</p>
+                <a href="{% url 'anamnese-geral-list' %}" class="btn btn-primary btn-sm">Ver Tudo</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Acupuntura</h5>
+                <p class="card-text fs-4">{{ acupuntura_count }}</p>
+                <a href="{% url 'anamnese-acupuntura-list' %}" class="btn btn-primary btn-sm">Ver Tudo</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Drenagem Linfática</h5>
+                <p class="card-text fs-4">{{ drenagem_count }}</p>
+                <a href="{% url 'drenagem-list' %}" class="btn btn-primary btn-sm">Ver Tudo</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Exercícios</h5>
+                <p class="card-text fs-4">{{ exercicios_count }}</p>
+                <a href="{% url 'exercicios-list' %}" class="btn btn-primary btn-sm">Ver Tudo</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<div class="row">
+    <div class="col-md-12">
+        <h4>Ações Rápidas</h4>
+        <div class="d-grid gap-2 d-sm-flex">
+            <a href="{% url 'inscricao-create' %}" class="btn btn-success">➕ Nova Inscrição</a>
+            <a href="{% url 'anamnese-geral-create' %}" class="btn btn-success">➕ Nova Anamnese Geral</a>
+            <a href="{% url 'anamnese-acupuntura-create' %}" class="btn btn-success">➕ Nova Acupuntura</a>
+            <a href="{% url 'drenagem-create' %}" class="btn btn-success">➕ Nova Drenagem</a>
+            <a href="{% url 'exercicios-create' %}" class="btn btn-success">➕ Novo Exercício</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

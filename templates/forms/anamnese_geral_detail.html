@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ ficha.nome }} - Anamnese Geral{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-10">
+        <h1>{{ ficha.nome }}</h1>
+        {% if ficha.paciente %}
+            <p class="text-muted">
+                Paciente: <a href="{% url 'inscricao-detail' ficha.paciente.pk %}">{{ ficha.paciente.nome }}</a>
+            </p>
+        {% endif %}
+    </div>
+    <div class="col-md-2 text-end">
+        <div class="btn-group" role="group">
+            <a href="{% url 'anamnese-geral-update' ficha.pk %}" class="btn btn-warning">Editar</a>
+            {% if ficha.concluido %}
+                <a href="{% url 'anamnese-geral-toggle-concluido' ficha.pk %}" class="btn btn-success">Marcar como Pendente</a>
+            {% else %}
+                <a href="{% url 'anamnese-geral-toggle-concluido' ficha.pk %}" class="btn btn-outline-success">Marcar como Concluído</a>
+            {% endif %}
+            <a href="{% url 'anamnese-geral-list' %}" class="btn btn-secondary">Voltar</a>
+        </div>
+    </div>
+</div>
+
+{% if ficha.concluido %}
+    <div class="alert alert-success" role="alert">
+        Status: Concluída em {{ ficha.atualizado_em|date:"d/m/Y H:i" }}
+    </div>
+{% else %}
+    <div class="alert alert-warning" role="alert">
+        Status: Pendente
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Dados Pessoais</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Profissão:</strong> {{ ficha.profissao }}</p>
+                <p><strong>Data de Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Data da Avaliação:</strong> {{ ficha.data|date:"d/m/Y" }}</p>
+            </div>
+        </div>
+
+        <hr>
+
+        <h5 class="card-title">Condições Médicas</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <ul>
+                    {% if ficha.diabetes %}<li>Diabetes</li>{% endif %}
+                    {% if ficha.anemia %}<li>Anemia</li>{% endif %}
+                    {% if ficha.hipoglicemia %}<li>Hipoglicemia</li>{% endif %}
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <ul>
+                    {% if ficha.pressao_alta %}<li>Pressão Alta</li>{% endif %}
+                    {% if ficha.pressao_baixa %}<li>Pressão Baixa</li>{% endif %}
+                    {% if ficha.problema_cardiaco %}<li>Problema Cardíaco</li>{% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <hr>
+
+        <h5 class="card-title">Informações Adicionais</h5>
+        {% if ficha.usa_medicamentos %}
+            <p><strong>Usa Medicamentos:</strong> Sim</p>
+            <p><strong>Medicamentos:</strong><br>{{ ficha.medicamentos_quais|linebreaks }}</p>
+        {% else %}
+            <p><strong>Usa Medicamentos:</strong> Não</p>
+        {% endif %}
+
+        {% if ficha.dor %}
+            <p><strong>Sente Dor:</strong><br>{{ ficha.dor|linebreaks }}</p>
+        {% endif %}
+
+        {% if ficha.observacoes %}
+            <p><strong>Observações:</strong><br>{{ ficha.observacoes|linebreaks }}</p>
+        {% endif %}
+
+        <hr>
+
+        <p class="text-muted small">
+            Criado em: {{ ficha.criado_em|date:"d/m/Y H:i" }}<br>
+            Atualizado em: {{ ficha.atualizado_em|date:"d/m/Y H:i" }}
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar{% else %}Nova{% endif %} - Anamnese Acupuntura{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pacienteSelect = document.getElementById('id_paciente');
+    
+    if (pacienteSelect) {
+        pacienteSelect.addEventListener('change', function() {
+            if (this.value) {
+                fetch(`/forms/api/paciente/${this.value}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('id_nome').value = data.nome || '';
+                        document.getElementById('id_profissao').value = data.profissao || '';
+                        document.getElementById('id_data_nascimento').value = data.data_nascimento || '';
+                        document.getElementById('id_endereco').value = data.endereco || '';
+                        document.getElementById('id_telefone').value = data.telefone || '';
+                        document.getElementById('id_idade').value = data.idade || '';
+                        
+                        // Preencher data_consulta com today se não existir
+                        const dataConsultaInput = document.getElementById('id_data_consulta');
+                        if (!dataConsultaInput.value) {
+                            const today = new Date().toISOString().split('T')[0];
+                            dataConsultaInput.value = today;
+                        }
+                    })
+                    .catch(error => console.error('Erro:', error));
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>{% if form.instance.pk %}Editar{% else %}Nova{% endif %} Anamnese - Acupuntura</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="needs-validation">
+            {% csrf_token %}
+            
+            <h5 class="mb-3">
+                Selecionar Paciente
+                <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Selecione um paciente cadastrado para preencher automaticamente os dados pessoais.">?</button>
+            </h5>
+            <div class="mb-3">
+                <label for="{{ form.paciente.id_for_label }}" class="form-label">{{ form.paciente.label }}</label>
+                {{ form.paciente }}
+                {% if form.paciente.errors %}<div class="invalid-feedback d-block">{{ form.paciente.errors }}</div>{% endif %}
+            </div>
+
+            <hr>
+
+            <h5 class="mb-3">Informações Pessoais</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.nome.id_for_label }}" class="form-label">{{ form.nome.label }}</label>
+                    {{ form.nome }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.data_consulta.id_for_label }}" class="form-label">{{ form.data_consulta.label }}</label>
+                    {{ form.data_consulta }}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.data_nascimento.id_for_label }}" class="form-label">{{ form.data_nascimento.label }}</label>
+                    {{ form.data_nascimento }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.idade.id_for_label }}" class="form-label">{{ form.idade.label }}</label>
+                    {{ form.idade }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.profissao.id_for_label }}" class="form-label">{{ form.profissao.label }}</label>
+                    {{ form.profissao }}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.endereco.id_for_label }}" class="form-label">{{ form.endereco.label }}</label>
+                    {{ form.endereco }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.telefone.id_for_label }}" class="form-label">{{ form.telefone.label }}</label>
+                    {{ form.telefone }}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.estado_civil.id_for_label }}" class="form-label">{{ form.estado_civil.label }}</label>
+                    {{ form.estado_civil }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.filhos.id_for_label }}" class="form-label">{{ form.filhos.label }}</label>
+                    {{ form.filhos }}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.religiao.id_for_label }}" class="form-label">{{ form.religiao.label }}</label>
+                    {{ form.religiao }}
+                </div>
+            </div>
+
+            <div class="form-check mb-3">
+                {{ form.ja_fez_acupuntura }}
+                <label class="form-check-label" for="{{ form.ja_fez_acupuntura.id_for_label }}">
+                    {{ form.ja_fez_acupuntura.label }}
+                </label>
+            </div>
+
+            <hr>
+
+            <h5 class="mb-3">História Médica</h5>
+            <div class="mb-3">
+                <label for="{{ form.queixa_principal.id_for_label }}" class="form-label">{{ form.queixa_principal.label }}</label>
+                {{ form.queixa_principal }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.historia_doenca_atual.id_for_label }}" class="form-label">{{ form.historia_doenca_atual.label }}</label>
+                {{ form.historia_doenca_atual }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.medicacao.id_for_label }}" class="form-label">{{ form.medicacao.label }}</label>
+                {{ form.medicacao }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.historia_patologica_pregressa.id_for_label }}" class="form-label">{{ form.historia_patologica_pregressa.label }}</label>
+                {{ form.historia_patologica_pregressa }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.doencas_familia.id_for_label }}" class="form-label">{{ form.doencas_familia.label }}</label>
+                {{ form.doencas_familia }}
+            </div>
+
+            <hr>
+
+            <h5 class="mb-3">Estilo de Vida</h5>
+            <div class="mb-3">
+                <label for="{{ form.rotina_diaria.id_for_label }}" class="form-label">{{ form.rotina_diaria.label }}</label>
+                {{ form.rotina_diaria }}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.atividade_fisica.id_for_label }}" class="form-label">{{ form.atividade_fisica.label }}</label>
+                {{ form.atividade_fisica }}
+            </div>
+
+            <hr>
+
+            <h5 class="mb-3">Exame Clínico</h5>
+            <div class="mb-3">
+                <label for="{{ form.sono.id_for_label }}" class="form-label">{{ form.sono.label }}</label>
+                {{ form.sono }}
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.emocao_predominante.id_for_label }}" class="form-label">{{ form.emocao_predominante.label }}</label>
+                    {{ form.emocao_predominante }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.sabor_preferido.id_for_label }}" class="form-label">{{ form.sabor_preferido.label }}</label>
+                    {{ form.sabor_preferido }}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.pulso_direito.id_for_label }}" class="form-label">{{ form.pulso_direito.label }}</label>
+                    {{ form.pulso_direito }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.pulso_esquerdo.id_for_label }}" class="form-label">{{ form.pulso_esquerdo.label }}</label>
+                    {{ form.pulso_esquerdo }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.lingua.id_for_label }}" class="form-label">{{ form.lingua.label }}</label>
+                {{ form.lingua }}
+            </div>
+
+            <hr>
+
+            <h5 class="mb-3">Diagnóstico e Prescrição</h5>
+            <div class="mb-3">
+                {{ form.diagnostico }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.prescricao }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.observacoes }}
+            </div>
+
+            <div class="d-grid gap-2 d-sm-flex justify-content-center">
+                <button type="submit" class="btn btn-primary">Salvar</button>
+                <a href="{% url 'anamnese-acupuntura-list' %}" class="btn btn-secondary">❌ Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
