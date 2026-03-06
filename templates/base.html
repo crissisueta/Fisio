@@ -80,6 +80,7 @@
             <div class="col-md-3 sidebar collapse show" id="sidebar">
                 <h5 class="px-3 py-3 border-bottom">Menu</h5>
                 <a href="/" class="{% if request.resolver_match.url_name == 'index' %}active{% endif %}">Dashboard</a>
+                <a href="{% url 'calendar-dashboard' %}" class="{% if 'calendar' in request.resolver_match.url_name %}active{% endif %}">Calendário</a>
                 
                 <h6 class="px-3 pt-3 pb-2 text-muted">Fichas de Avaliação</h6>
                 <a href="{% url 'inscricao-list' %}" class="{% if 'inscricao' in request.resolver_match.url_name %}active{% endif %}">

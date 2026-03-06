@@ -37,15 +37,18 @@ class AnamneseGeralForm(forms.ModelForm):
         fields = [
             'paciente', 'nome', 'profissao', 'data_nascimento', 'data',
             'diabetes', 'anemia', 'hipoglicemia', 'pressao_alta', 'pressao_baixa',
-            'problema_cardiaco', 'usa_medicamentos', 'medicamentos_quais',
-            'dor', 'observacoes'
+            'problema_cardiaco', 'usa_medicamentos', 'observacoes'
         ]
+        labels = {
+            'data': 'Data de Avaliação',
+            'data_nascimento': 'Data de Nascimento',
+        }
         widgets = {
             'paciente': forms.Select(attrs={'class': 'form-control', 'id': 'id_paciente'}),
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
             'profissao': forms.TextInput(attrs={'class': 'form-control'}),
-            'data_nascimento': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'data': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data_nascimento': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
+            'data': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
             'diabetes': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'anemia': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'hipoglicemia': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -53,10 +56,13 @@ class AnamneseGeralForm(forms.ModelForm):
             'pressao_baixa': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'problema_cardiaco': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'usa_medicamentos': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'medicamentos_quais': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'dor': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # make sure the datetime-local widget value is parsed with both date and time
+        self.fields['data'].input_formats = ['%Y-%m-%dT%H:%M']
 
 
 class AnamneseAcupunturaForm(forms.ModelForm):
@@ -74,7 +80,7 @@ class AnamneseAcupunturaForm(forms.ModelForm):
         widgets = {
             'paciente': forms.Select(attrs={'class': 'form-control', 'id': 'id_paciente'}),
             'nome': forms.TextInput(attrs={'class': 'form-control'}),
-            'data_consulta': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data_consulta': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
             'endereco': forms.TextInput(attrs={'class': 'form-control'}),
             'telefone': forms.TextInput(attrs={'class': 'form-control'}),
             'data_nascimento': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
@@ -102,6 +108,10 @@ class AnamneseAcupunturaForm(forms.ModelForm):
             'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['data_consulta'].input_formats = ['%Y-%m-%dT%H:%M']
+
 
 class FichaDrenagemForm(forms.ModelForm):
     class Meta:
@@ -121,12 +131,16 @@ class FichaDrenagemForm(forms.ModelForm):
             'idade': forms.NumberInput(attrs={'class': 'form-control'}),
             'altura': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'peso': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
-            'data': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'data': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
             'queixa': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'historia_doenca_atual': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'avaliacao': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'historia_patologica_pregressa': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['data'].input_formats = ['%Y-%m-%dT%H:%M']
 
 
 class FichaExerciciosForm(forms.ModelForm):
@@ -144,6 +158,10 @@ class FichaExerciciosForm(forms.ModelForm):
             'flexibilidade': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'dominancia_muscular': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'observacoes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'dia': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'dia': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
             'mes': forms.TextInput(attrs={'class': 'form-control', 'type': 'month'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['dia'].input_formats = ['%Y-%m-%dT%H:%M']

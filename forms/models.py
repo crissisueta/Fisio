@@ -1,7 +1,16 @@
 from django.db import models
 
 
-class FichaInscricao(models.Model):
+class TimestampedModel(models.Model):
+    """Abstract base model that provides automatic timestamps."""
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class FichaInscricao(TimestampedModel):
     """Ficha de Inscrição - Registration Form"""
     nome = models.CharField(max_length=200)
     cpf = models.CharField(max_length=14, unique=True)
@@ -17,25 +26,23 @@ class FichaInscricao(models.Model):
     data_matricula = models.DateField()
     plano = models.CharField(max_length=100)
     observacoes = models.TextField(blank=True)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = 'Ficha de Inscrição'
         verbose_name_plural = 'Fichas de Inscrição'
-        ordering = ['-criado_em']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.nome} - {self.cpf}"
 
 
-class AnamneseGeral(models.Model):
+class AnamneseGeral(TimestampedModel):
     """Anamnese Geral - General Anamnesis Form"""
     paciente = models.ForeignKey(FichaInscricao, on_delete=models.CASCADE, null=True, blank=True, related_name='anamneses_geral', verbose_name='Paciente')
     nome = models.CharField(max_length=200)
     profissao = models.CharField(max_length=100)
     data_nascimento = models.DateField()
-    data = models.DateField()
+    data = models.DateTimeField()  # Data de Avaliação - converted to DateTime for scheduling
     concluido = models.BooleanField(default=False)
     
     # Condições
@@ -47,26 +54,22 @@ class AnamneseGeral(models.Model):
     problema_cardiaco = models.BooleanField(default=False)
     
     usa_medicamentos = models.BooleanField(default=False)
-    medicamentos_quais = models.TextField(blank=True)
-    dor = models.TextField(blank=True)
     observacoes = models.TextField(blank=True)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = 'Anamnese Geral'
         verbose_name_plural = 'Anamneses Gerais'
-        ordering = ['-criado_em']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.nome} - {self.data}"
 
 
-class AnamneseAcupuntura(models.Model):
+class AnamneseAcupuntura(TimestampedModel):
     """Anamnese - Acupuntura - Acupuncture Anamnesis Form"""
     paciente = models.ForeignKey(FichaInscricao, on_delete=models.CASCADE, null=True, blank=True, related_name='anamneses_acupuntura', verbose_name='Paciente')
     nome = models.CharField(max_length=200)
-    data_consulta = models.DateField()
+    data_consulta = models.DateTimeField()  # Converted to DateTime for scheduling
     endereco = models.CharField(max_length=300)
     telefone = models.CharField(max_length=15)
     data_nascimento = models.DateField()
@@ -98,19 +101,21 @@ class AnamneseAcupuntura(models.Model):
     diagnostico = models.TextField(blank=True)
     prescricao = models.TextField(blank=True)
     observacoes = models.TextField(blank=True)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
+
+    # generic relation for follow-up sessions
+    from django.contrib.contenttypes.fields import GenericRelation
+    followups = GenericRelation('FollowUpSession', related_query_name='anamneses_acupuntura')
 
     class Meta:
         verbose_name = 'Anamnese - Acupuntura'
         verbose_name_plural = 'Anamneses - Acupuntura'
-        ordering = ['-criado_em']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.nome} - Acupuntura - {self.data_consulta}"
 
 
-class FichaDrenagem(models.Model):
+class FichaDrenagem(TimestampedModel):
     """Ficha de Avaliação - Drenagem Linfática - Lymphatic Drainage Assessment Form"""
     paciente = models.ForeignKey(FichaInscricao, on_delete=models.CASCADE, null=True, blank=True, related_name='fichas_drenagem', verbose_name='Paciente')
     nome = models.CharField(max_length=200)
@@ -121,26 +126,28 @@ class FichaDrenagem(models.Model):
     idade = models.IntegerField()
     altura = models.DecimalField(max_digits=5, decimal_places=2)  # in cm
     peso = models.DecimalField(max_digits=5, decimal_places=1)    # in kg
-    data = models.DateField()
+    data = models.DateTimeField()  # Converted to DateTime for scheduling
     concluido = models.BooleanField(default=False)
     
     queixa = models.TextField()
     historia_doenca_atual = models.TextField()
     avaliacao = models.TextField()
     historia_patologica_pregressa = models.TextField(blank=True)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
+
+    # generic relation for follow-up sessions
+    from django.contrib.contenttypes.fields import GenericRelation
+    followups = GenericRelation('FollowUpSession', related_query_name='fichas_drenagem')
 
     class Meta:
         verbose_name = 'Ficha de Avaliação - Drenagem Linfática'
         verbose_name_plural = 'Fichas de Avaliação - Drenagem Linfática'
-        ordering = ['-criado_em']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.nome} - Drenagem - {self.data}"
 
 
-class FichaExercicios(models.Model):
+class FichaExercicios(TimestampedModel):
     """Ficha de Exercícios - Exercise Sheet"""
     paciente = models.ForeignKey(FichaInscricao, on_delete=models.CASCADE, null=True, blank=True, related_name='fichas_exercicios', verbose_name='Paciente')
     aluno = models.CharField(max_length=200)
@@ -149,16 +156,39 @@ class FichaExercicios(models.Model):
     flexibilidade = models.TextField()
     dominancia_muscular = models.TextField()
     observacoes = models.TextField(blank=True)
-    dia = models.DateField()
+    dia = models.DateTimeField()  # Converted to DateTime for scheduling
     mes = models.CharField(max_length=7, blank=True)  # For month storage if needed
     concluido = models.BooleanField(default=False)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
+    
+    # generic relation to follow-up sessions
+    from django.contrib.contenttypes.fields import GenericRelation
+    followups = GenericRelation('FollowUpSession', related_query_name='fichas_exercicios')
 
     class Meta:
         verbose_name = 'Ficha de Exercícios'
         verbose_name_plural = 'Fichas de Exercícios'
-        ordering = ['-criado_em']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.aluno} - {self.dia}"
+
+
+class FollowUpSession(models.Model):
+    """Generic follow-up session tied to any procedure record."""
+    # generic foreign key to support multiple procedure models
+    from django.contrib.contenttypes.models import ContentType
+    from django.contrib.contenttypes.fields import GenericForeignKey
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    procedure = GenericForeignKey('content_type', 'object_id')
+
+    session_date = models.DateTimeField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-session_date']
+
+    def __str__(self):
+        return f"Sessão em {self.session_date} para {self.procedure}"

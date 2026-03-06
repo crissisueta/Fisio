@@ -14,6 +14,7 @@ from .forms import (
     FichaInscricaoForm, AnamneseGeralForm, AnamneseAcupunturaForm,
     FichaDrenagemForm, FichaExerciciosForm
 )
+from .services.calendar_service import build_calendar_events
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -116,6 +117,16 @@ class AnamneseGeralDetailView(LoginRequiredMixin, DetailView):
     template_name = 'forms/anamnese_geral_detail.html'
     context_object_name = 'ficha'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        obj = self.get_object()
+        from django.contrib.contenttypes.models import ContentType
+        from .models import FollowUpSession
+        ct = ContentType.objects.get_for_model(obj)
+        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
+        context['model_slug'] = 'anamnese-geral'
+        return context
+
 
 class AnamneseGeralCreateView(LoginRequiredMixin, CreateView):
     model = AnamneseGeral
@@ -161,6 +172,16 @@ class AnamneseAcupunturaDetailView(LoginRequiredMixin, DetailView):
     model = AnamneseAcupuntura
     template_name = 'forms/anamnese_acupuntura_detail.html'
     context_object_name = 'ficha'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        obj = self.get_object()
+        from django.contrib.contenttypes.models import ContentType
+        from .models import FollowUpSession
+        ct = ContentType.objects.get_for_model(obj)
+        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
+        context['model_slug'] = 'anamnese-acupuntura'
+        return context
 
 
 class AnamneseAcupunturaCreateView(LoginRequiredMixin, CreateView):
@@ -208,6 +229,16 @@ class FichaDrenagemDetailView(LoginRequiredMixin, DetailView):
     template_name = 'forms/drenagem_detail.html'
     context_object_name = 'ficha'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        obj = self.get_object()
+        from django.contrib.contenttypes.models import ContentType
+        from .models import FollowUpSession
+        ct = ContentType.objects.get_for_model(obj)
+        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
+        context['model_slug'] = 'drenagem'
+        return context
+
 
 class FichaDrenagemCreateView(LoginRequiredMixin, CreateView):
     model = FichaDrenagem
@@ -253,6 +284,16 @@ class FichaExerciciosDetailView(LoginRequiredMixin, DetailView):
     model = FichaExercicios
     template_name = 'forms/exercicios_detail.html'
     context_object_name = 'ficha'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        obj = self.get_object()
+        from django.contrib.contenttypes.models import ContentType
+        from .models import FollowUpSession
+        ct = ContentType.objects.get_for_model(obj)
+        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
+        context['model_slug'] = 'exercicios'
+        return context
 
 
 class FichaExerciciosCreateView(LoginRequiredMixin, CreateView):
@@ -331,3 +372,63 @@ def toggle_exercicios_concluido(request, pk):
     status = 'marcada como concluída' if ficha.concluido else 'marcada como pendente'
     messages.success(request, f'Ficha de Exercícios {status}!')
     return redirect('exercicios-detail', pk=pk)
+
+
+@login_required
+
+def add_followup(request, model_slug, pk):
+    """Create a new FollowUpSession for a given procedure instance."""
+    from django.contrib.contenttypes.models import ContentType
+    from .models import FollowUpSession
+    # map slug to model class
+    slug_map = {
+        'anamnese-geral': AnamneseGeral,
+        'anamnese-acupuntura': AnamneseAcupuntura,
+        'drenagem': FichaDrenagem,
+        'exercicios': FichaExercicios,
+    }
+    model = slug_map.get(model_slug)
+    if not model:
+        messages.error(request, 'Procedimento inválido.')
+        return redirect('index')
+    obj = get_object_or_404(model, pk=pk)
+    if request.method == 'POST':
+        session_date = request.POST.get('session_date')
+        notes = request.POST.get('notes', '')
+        if session_date:
+            # create session
+            FollowUpSession.objects.create(
+                content_type=ContentType.objects.get_for_model(obj),
+                object_id=obj.pk,
+                session_date=session_date,
+                notes=notes
+            )
+            messages.success(request, 'Sessão adicionada com sucesso!')
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+    return redirect(obj.pk)
+
+
+@login_required
+
+def edit_followup(request, session_id):
+    from .models import FollowUpSession
+    session = get_object_or_404(FollowUpSession, pk=session_id)
+    if request.method == 'POST':
+        if 'session_date' in request.POST:
+            session.session_date = request.POST.get('session_date')
+        session.notes = request.POST.get('notes', '')
+        session.save()
+        messages.success(request, 'Sessão atualizada com sucesso!')
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+def calendar_events(request):
+    """API endpoint to return calendar events as JSON"""
+    events = build_calendar_events()
+    return JsonResponse(events, safe=False)
+
+
+class CalendarDashboardView(LoginRequiredMixin, TemplateView):
+    """Calendar dashboard view"""
+    template_name = 'dashboard/calendar.html'

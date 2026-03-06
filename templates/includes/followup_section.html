@@ -1,0 +1,71 @@
+<hr>
+<h4>Sessões / Acompanhamento</h4>
+<div class="card mb-3">
+    <div class="card-body">
+        {% if sessions %}
+            <ul class="list-group">
+                {% for sess in sessions %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ sess.session_date|date:"d/m/Y H:i" }}</strong><br>
+                                {% if sess.notes %}
+                                    {{ sess.notes|linebreaks }}
+                                {% else %}
+                                    <em>Sem notas</em>
+                                {% endif %}
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">
+                                Notas
+                            </button>
+                        </div>
+                        <div class="collapse mt-2" id="edit-session-{{ sess.pk }}">
+                            <form method="post" action="{% url 'followup-edit' sess.pk %}">
+                                {% csrf_token %}
+                                <div class="mb-2">
+                                    <label class="form-label">Data da Sessão</label>
+                                    <input type="datetime-local" name="session_date" value="{{ sess.session_date|date:'Y-m-d\TH:i' }}" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Notas da Sessão</label>
+                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
+                                </div>
+                                <button class="btn btn-sm btn-primary">Salvar</button>
+                            </form>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Nenhuma sessão registrada.</p>
+        {% endif %}
+
+        <button class="btn btn-sm btn-success mt-3" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão</button>
+    </div>
+</div>
+
+<!-- new session modal -->
+<div class="modal fade" id="newSessionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'followup-new' model_slug ficha.pk %}">
+         {% csrf_token %}
+         <div class="modal-header"><h5 class="modal-title">Nova sessão</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+         <div class="modal-body">
+            <div class="mb-2">
+              <label class="form-label">Data da Sessão</label>
+              <input type="datetime-local" name="session_date" class="form-control">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Notas da Sessão</label>
+              <textarea name="notes" class="form-control" rows="3"></textarea>
+            </div>
+         </div>
+         <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Salvar</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+         </div>
+      </form>
+    </div>
+  </div>
+</div>

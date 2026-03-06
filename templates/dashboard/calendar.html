@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Calendário - Visão Geral{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+<style>
+    #calendar {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    .fc-event {
+        cursor: pointer;
+    }
+    .fc-event:hover {
+        opacity: 0.8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>Calendário de Atividades</h1>
+        <p class="text-muted">Visão geral de todas as consultas, avaliações e sessões agendadas</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <h6>Legenda:</h6>
+        <div class="d-flex flex-wrap gap-3">
+            <span class="badge bg-primary">Anamnese Geral</span>
+            <span class="badge" style="background-color: #6f42c1; color: white;">Acupuntura</span>
+            <span class="badge bg-success">Drenagem Linfática</span>
+            <span class="badge" style="background-color: #fd7e14;">Exercícios</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: '/forms/calendar/events/',
+        eventClick: function(info) {
+            // Navigate in the same tab rather than opening a new one
+            window.location.href = info.event.url;
+        },
+        eventDisplay: 'block',
+        dayMaxEvents: true,
+        moreLinkClick: 'popover',
+        locale: 'pt-br',
+        timeZone: 'local',  // let FullCalendar use the browser locale
+        height: 'auto'
+    });
+    calendar.render();
+});
+</script>
+{% endblock %}

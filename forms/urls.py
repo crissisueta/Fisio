@@ -18,6 +18,10 @@ from .views import (
     FichaExerciciosUpdateView, FichaExerciciosDeleteView, toggle_exercicios_concluido,
     # API
     get_paciente_data,
+    # Calendar
+    calendar_events, CalendarDashboardView,
+    # Follow-up
+    add_followup, edit_followup,
 )
 
 urlpatterns = [
@@ -68,4 +72,12 @@ urlpatterns = [
     path('anamnese-geral/<int:pk>/concluido/', toggle_anamnese_geral_concluido, name='anamnese-geral-toggle-concluido'),
     path('anamnese-acupuntura/<int:pk>/concluido/', toggle_anamnese_acupuntura_concluido, name='anamnese-acupuntura-toggle-concluido'),
     path('drenagem/<int:pk>/concluido/', toggle_drenagem_concluido, name='drenagem-toggle-concluido'),
+    
+    # Calendar
+    path('calendar/', CalendarDashboardView.as_view(), name='calendar-dashboard'),
+    path('calendar/events/', calendar_events, name='calendar-events'),
+
+    # Follow-up session URLs
+    path('<slug:model_slug>/<int:pk>/followup/new/', add_followup, name='followup-new'),
+    path('followup/<int:session_id>/edit/', edit_followup, name='followup-edit'),
 ]

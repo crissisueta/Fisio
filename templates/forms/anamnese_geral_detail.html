@@ -70,23 +70,16 @@
 
         <hr>
 
-        <h5 class="card-title">Informações Adicionais</h5>
-        {% if ficha.usa_medicamentos %}
-            <p><strong>Usa Medicamentos:</strong> Sim</p>
-            <p><strong>Medicamentos:</strong><br>{{ ficha.medicamentos_quais|linebreaks }}</p>
-        {% else %}
-            <p><strong>Usa Medicamentos:</strong> Não</p>
-        {% endif %}
-
-        {% if ficha.dor %}
-            <p><strong>Sente Dor:</strong><br>{{ ficha.dor|linebreaks }}</p>
-        {% endif %}
-
+        <h5 class="card-title">Observações</h5>
         {% if ficha.observacoes %}
-            <p><strong>Observações:</strong><br>{{ ficha.observacoes|linebreaks }}</p>
+            <p>{{ ficha.observacoes|linebreaks }}</p>
+        {% else %}
+            <p><em>Nenhuma observação registrada.</em></p>
         {% endif %}
 
         <hr>
+
+        {% include 'includes/followup_section.html' %}
 
         <p class="text-muted small">
             Criado em: {{ ficha.criado_em|date:"d/m/Y H:i" }}<br>
