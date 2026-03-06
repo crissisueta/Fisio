@@ -1,26 +1,30 @@
-# Sistema de Gestão de Procedimentos de Fisioterapia
+# Sistema de Gestão Clínica de Fisioterapia
 
-Aplicação Django para gestão de pacientes, procedimentos e sessões de acompanhamento em clínicas de fisioterapia.
+Aplicação Django para gestão de pacientes, avaliações, procedimentos e sessões de acompanhamento.
 
 ## Arquitetura Atual
 
-O sistema usa um modelo unificado:
+Modelos principais:
 
-- `FichaInscricao` (paciente)
-- `ProcedureType` (tipo de procedimento)
-- `Procedure` (plano/tratamento do paciente)
-- `ProcedureSession` (sessões agendadas do procedimento)
+- `Paciente`
+- `TipoAvaliacao`
+- `Avaliacao`
+- `TipoProcedimento`
+- `Procedimento`
+- `Sessao`
+- `FichaExercicios` (estrutura base, sem módulo avançado nesta fase)
 
-Toda a agenda do calendário é baseada em `ProcedureSession`.
+Calendário: gera eventos somente a partir de `Sessao`.
 
 ## Funcionalidades
 
-- Cadastro e gestão de pacientes (`inscricao`)
-- CRUD de procedimentos
-- Múltiplas sessões por procedimento
-- Marcação de status concluído/pendente em procedimento e sessão
-- Calendário consolidado de sessões
-- Django Admin para gestão completa
+- Cadastro completo de pacientes
+- Cadastro de tipos de avaliação e de procedimento
+- Registro de avaliações clínicas
+- Gestão de procedimentos terapêuticos
+- Sessões com status: `agendada`, `realizada`, `faltou`, `cancelada`
+- Linha do tempo de sessões por procedimento
+- Calendário com cor por tipo de procedimento e indicador visual de conclusão do procedimento
 
 ## Requisitos
 
@@ -29,94 +33,33 @@ Toda a agenda do calendário é baseada em `ProcedureSession`.
 
 ## Instalação
 
-1. Entre na pasta do projeto:
-
 ```bash
 cd /caminho/para/Fisio
-```
-
-2. Crie um ambiente virtual:
-
-```bash
 python -m venv .venv
-```
-
-3. Ative o ambiente virtual:
-
-Linux/Mac:
-```bash
-source .venv/bin/activate
-```
-
-Windows:
-```bash
-.venv\Scripts\activate
-```
-
-4. Instale dependências:
-
-```bash
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
-```
-
-5. Configure variáveis de ambiente (opcional para dev local):
-
-- O projeto lê automaticamente `env/Fisio.env` se o arquivo existir.
-
-6. Execute migrações:
-
-```bash
 python manage.py migrate
-```
-
-7. Crie um superusuário:
-
-```bash
 python manage.py createsuperuser
-```
-
-## Executar Aplicação
-
-```bash
 python manage.py runserver
 ```
 
-Acessos:
+## Acessos
 
-- Dashboard: `http://localhost:8000/`
-- Módulo de pacientes/procedimentos: `http://localhost:8000/forms/`
-- Admin: `http://localhost:8000/admin`
+- Painel: `http://localhost:8000/`
+- Pacientes: `http://localhost:8000/forms/inscricao/`
+- Avaliações: `http://localhost:8000/forms/avaliacoes/`
+- Procedimentos: `http://localhost:8000/forms/procedimentos/`
+- Calendário: `http://localhost:8000/forms/calendario/`
+- Admin: `http://localhost:8000/admin/`
 
-## Estrutura Resumida
+## Observações da Migração
 
-```text
-Fisio/
-├── fisio_project/               # Configuração Django
-├── forms/                       # App principal
-│   ├── models.py                # FichaInscricao, ProcedureType, Procedure, ProcedureSession
-│   ├── views.py                 # Views de paciente/procedimento/sessão/calendário
-│   ├── forms.py                 # ModelForms
-│   ├── urls.py                  # Rotas do app
-│   ├── admin.py                 # Configuração admin
-│   └── migrations/              # Histórico de migrações (inclui migração de dados legados)
-└── templates/
-    ├── index.html
-    ├── dashboard/calendar.html
-    ├── includes/followup_section.html
-    └── forms/
-        ├── inscricao_*.html
-        └── procedure_*.html
-```
+As migrações incluem:
 
-## Observação sobre Migração de Dados
-
-As migrações recentes já incluem:
-
-- criação do modelo unificado
-- migração de dados legados para `Procedure`/`ProcedureSession`
-- remoção dos modelos legados
-
-Se você estiver em ambiente novo, apenas rode `migrate`.
+- consolidação da arquitetura clínica unificada
+- conversão de status e estrutura de sessões
+- normalização dos modelos para `Paciente/Avaliacao/Procedimento/Sessao`
 
 ## Suporte
 

@@ -8,86 +8,71 @@
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão de acompanhamento</button>
         </div>
 
-        {% if next_upcoming_session %}
+        {% if proxima_sessao %}
         <div class="alert alert-primary d-flex justify-content-between align-items-center flex-wrap gap-2" role="alert">
             <div>
                 <strong>Próxima sessão:</strong>
-                {{ next_upcoming_session.scheduled_datetime|date:"d/m/Y H:i" }}
-                <span class="badge bg-primary ms-2">{{ next_upcoming_session.get_status_display }}</span>
+                {{ proxima_sessao.data_hora|date:"d/m/Y H:i" }}
+                <span class="badge bg-primary ms-2">{{ proxima_sessao.get_status_display }}</span>
             </div>
-            <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" href="#session-notes-{{ next_upcoming_session.pk }}">Abrir notas</a>
+            <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" href="#sessao-notas-{{ proxima_sessao.pk }}">Abrir notas</a>
         </div>
         {% endif %}
 
         <div class="mb-4">
             <h5 class="mb-3">Sessões futuras</h5>
-            {% if upcoming_sessions %}
+            {% if sessoes_futuras %}
             <div class="timeline-col">
-                {% for sess in upcoming_sessions %}
-                <div class="card session-card mb-3 {% if next_upcoming_session and next_upcoming_session.pk == sess.pk %}next-session{% endif %}">
+                {% for sessao in sessoes_futuras %}
+                <div class="card sessao-card mb-3 {% if proxima_sessao and proxima_sessao.pk == sessao.pk %}proxima-sessao{% endif %}">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                             <div>
-                                <h6 class="mb-1">{{ sess.scheduled_datetime|date:"d/m/Y H:i" }}</h6>
-                                {% if sess.status == 'scheduled' %}
-                                <span class="badge text-dark" style="background-color: #ffc107;">Agendada</span>
-                                {% elif sess.status == 'completed' %}
-                                <span class="badge bg-success">Concluída</span>
-                                {% elif sess.status == 'cancelled' %}
-                                <span class="badge bg-secondary">Cancelada</span>
-                                {% else %}
-                                <span class="badge bg-danger">Faltou</span>
-                                {% endif %}
+                                <h6 class="mb-1">{{ sessao.data_hora|date:"d/m/Y H:i" }}</h6>
+                                <span class="badge {% if sessao.status == 'agendada' %}text-dark" style="background-color:#ffc107;{% elif sessao.status == 'realizada' %}bg-success{% elif sessao.status == 'cancelada' %}bg-secondary{% else %}bg-danger{% endif %}">
+                                    {{ sessao.get_status_display }}
+                                </span>
                             </div>
                             <div class="d-flex gap-1 flex-wrap">
-                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'completed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-success">Concluir</button></form>
-                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'cancelled' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Cancelar</button></form>
-                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'missed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Faltou</button></form>
-                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">Editar</button>
+                                <form method="post" action="{% url 'procedure-session-status' sessao.pk 'realizada' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-success">Realizada</button></form>
+                                <form method="post" action="{% url 'procedure-session-status' sessao.pk 'cancelada' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Cancelar</button></form>
+                                <form method="post" action="{% url 'procedure-session-status' sessao.pk 'faltou' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Faltou</button></form>
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#editar-sessao-{{ sessao.pk }}">Editar</button>
                             </div>
                         </div>
 
                         <p class="text-muted mb-2">
-                            {% if sess.notes %}
-                            {{ sess.notes|striptags|truncatechars:120 }}
-                            {% else %}
-                            Sem notas registradas.
-                            {% endif %}
+                            {% if sessao.observacoes %}{{ sessao.observacoes|striptags|truncatechars:120 }}{% else %}Sem observações registradas.{% endif %}
                         </p>
 
-                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#session-notes-{{ sess.pk }}">Abrir notas completas</a>
-                        <div class="collapse mt-2" id="session-notes-{{ sess.pk }}">
-                            <div class="border rounded p-2 bg-light">
-                                {% if sess.notes %}
-                                {{ sess.notes|linebreaks }}
-                                {% else %}
-                                <em>Sem notas.</em>
-                                {% endif %}
-                            </div>
+                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#sessao-notas-{{ sessao.pk }}">Abrir observações completas</a>
+                        <div class="collapse mt-2" id="sessao-notas-{{ sessao.pk }}">
+                            <div class="border rounded p-2 bg-light">{% if sessao.observacoes %}{{ sessao.observacoes|linebreaks }}{% else %}<em>Sem observações.</em>{% endif %}</div>
                         </div>
 
-                        <div class="collapse mt-3" id="edit-session-{{ sess.pk }}">
-                            <form method="post" action="{% url 'procedure-session-edit' sess.pk %}">
+                        <div class="collapse mt-3" id="editar-sessao-{{ sessao.pk }}">
+                            <form method="post" action="{% url 'procedure-session-edit' sessao.pk %}">
                                 {% csrf_token %}
                                 <div class="row">
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label">Data e Hora</label>
-                                        <input type="datetime-local" name="scheduled_datetime" value="{{ sess.scheduled_datetime|date:'Y-m-d\\TH:i' }}" class="form-control" required>
-                                    </div>
-                                    <div class="col-md-4 mb-2">
+                                    <div class="col-md-4 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
+                                    <div class="col-md-3 mb-2"><label class="form-label">Número</label><input type="number" min="1" name="numero" value="{{ sessao.numero|default:'' }}" class="form-control"></div>
+                                    <div class="col-md-3 mb-2">
                                         <label class="form-label">Status</label>
                                         <select name="status" class="form-select">
-                                            <option value="scheduled" {% if sess.status == 'scheduled' %}selected{% endif %}>Agendada</option>
-                                            <option value="completed" {% if sess.status == 'completed' %}selected{% endif %}>Concluída</option>
-                                            <option value="cancelled" {% if sess.status == 'cancelled' %}selected{% endif %}>Cancelada</option>
-                                            <option value="missed" {% if sess.status == 'missed' %}selected{% endif %}>Faltou</option>
+                                            <option value="agendada" {% if sessao.status == 'agendada' %}selected{% endif %}>Agendada</option>
+                                            <option value="realizada" {% if sessao.status == 'realizada' %}selected{% endif %}>Realizada</option>
+                                            <option value="faltou" {% if sessao.status == 'faltou' %}selected{% endif %}>Faltou</option>
+                                            <option value="cancelada" {% if sessao.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
                                         </select>
                                     </div>
+                                    <div class="col-md-2 mb-2 d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="assinatura_confirmada" id="assinatura-{{ sessao.pk }}" {% if sessao.assinatura_confirmada %}checked{% endif %}>
+                                            <label class="form-check-label" for="assinatura-{{ sessao.pk }}">Assin.</label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="mb-2">
-                                    <label class="form-label">Notas</label>
-                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
-                                </div>
+                                <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="3">{{ sessao.observacoes }}</textarea></div>
                                 <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
                             </form>
                         </div>
@@ -102,71 +87,48 @@
 
         <div>
             <h5 class="mb-3">Sessões passadas</h5>
-            {% if past_sessions %}
+            {% if sessoes_passadas %}
             <div class="timeline-col">
-                {% for sess in past_sessions %}
-                <div class="card session-card mb-3">
+                {% for sessao in sessoes_passadas %}
+                <div class="card sessao-card mb-3">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                             <div>
-                                <h6 class="mb-1">{{ sess.scheduled_datetime|date:"d/m/Y H:i" }}</h6>
-                                {% if sess.status == 'scheduled' %}
-                                <span class="badge text-dark" style="background-color: #ffc107;">Agendada</span>
-                                {% elif sess.status == 'completed' %}
-                                <span class="badge bg-success">Concluída</span>
-                                {% elif sess.status == 'cancelled' %}
-                                <span class="badge bg-secondary">Cancelada</span>
-                                {% else %}
-                                <span class="badge bg-danger">Faltou</span>
-                                {% endif %}
+                                <h6 class="mb-1">{{ sessao.data_hora|date:"d/m/Y H:i" }}</h6>
+                                <span class="badge {% if sessao.status == 'agendada' %}text-dark" style="background-color:#ffc107;{% elif sessao.status == 'realizada' %}bg-success{% elif sessao.status == 'cancelada' %}bg-secondary{% else %}bg-danger{% endif %}">{{ sessao.get_status_display }}</span>
                             </div>
                             <div class="d-flex gap-1 flex-wrap">
-                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'scheduled' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-warning">Reabrir</button></form>
-                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">Editar</button>
+                                <form method="post" action="{% url 'procedure-session-status' sessao.pk 'agendada' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-warning">Reabrir</button></form>
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#editar-sessao-{{ sessao.pk }}">Editar</button>
                             </div>
                         </div>
+                        <p class="text-muted mb-2">{% if sessao.observacoes %}{{ sessao.observacoes|striptags|truncatechars:120 }}{% else %}Sem observações registradas.{% endif %}</p>
+                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#sessao-notas-{{ sessao.pk }}">Abrir observações completas</a>
+                        <div class="collapse mt-2" id="sessao-notas-{{ sessao.pk }}"><div class="border rounded p-2 bg-light">{% if sessao.observacoes %}{{ sessao.observacoes|linebreaks }}{% else %}<em>Sem observações.</em>{% endif %}</div></div>
 
-                        <p class="text-muted mb-2">
-                            {% if sess.notes %}
-                            {{ sess.notes|striptags|truncatechars:120 }}
-                            {% else %}
-                            Sem notas registradas.
-                            {% endif %}
-                        </p>
-
-                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#session-notes-{{ sess.pk }}">Abrir notas completas</a>
-                        <div class="collapse mt-2" id="session-notes-{{ sess.pk }}">
-                            <div class="border rounded p-2 bg-light">
-                                {% if sess.notes %}
-                                {{ sess.notes|linebreaks }}
-                                {% else %}
-                                <em>Sem notas.</em>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div class="collapse mt-3" id="edit-session-{{ sess.pk }}">
-                            <form method="post" action="{% url 'procedure-session-edit' sess.pk %}">
+                        <div class="collapse mt-3" id="editar-sessao-{{ sessao.pk }}">
+                            <form method="post" action="{% url 'procedure-session-edit' sessao.pk %}">
                                 {% csrf_token %}
                                 <div class="row">
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label">Data e Hora</label>
-                                        <input type="datetime-local" name="scheduled_datetime" value="{{ sess.scheduled_datetime|date:'Y-m-d\\TH:i' }}" class="form-control" required>
-                                    </div>
-                                    <div class="col-md-4 mb-2">
+                                    <div class="col-md-4 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
+                                    <div class="col-md-3 mb-2"><label class="form-label">Número</label><input type="number" min="1" name="numero" value="{{ sessao.numero|default:'' }}" class="form-control"></div>
+                                    <div class="col-md-3 mb-2">
                                         <label class="form-label">Status</label>
                                         <select name="status" class="form-select">
-                                            <option value="scheduled" {% if sess.status == 'scheduled' %}selected{% endif %}>Agendada</option>
-                                            <option value="completed" {% if sess.status == 'completed' %}selected{% endif %}>Concluída</option>
-                                            <option value="cancelled" {% if sess.status == 'cancelled' %}selected{% endif %}>Cancelada</option>
-                                            <option value="missed" {% if sess.status == 'missed' %}selected{% endif %}>Faltou</option>
+                                            <option value="agendada" {% if sessao.status == 'agendada' %}selected{% endif %}>Agendada</option>
+                                            <option value="realizada" {% if sessao.status == 'realizada' %}selected{% endif %}>Realizada</option>
+                                            <option value="faltou" {% if sessao.status == 'faltou' %}selected{% endif %}>Faltou</option>
+                                            <option value="cancelada" {% if sessao.status == 'cancelada' %}selected{% endif %}>Cancelada</option>
                                         </select>
                                     </div>
+                                    <div class="col-md-2 mb-2 d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="assinatura_confirmada" id="assinatura-passada-{{ sessao.pk }}" {% if sessao.assinatura_confirmada %}checked{% endif %}>
+                                            <label class="form-check-label" for="assinatura-passada-{{ sessao.pk }}">Assin.</label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="mb-2">
-                                    <label class="form-label">Notas</label>
-                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
-                                </div>
+                                <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="3">{{ sessao.observacoes }}</textarea></div>
                                 <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
                             </form>
                         </div>
@@ -184,7 +146,7 @@
 <div class="modal fade" id="newSessionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" action="{% url 'procedure-session-add' procedure.pk %}">
+            <form method="post" action="{% url 'procedure-session-add' procedimento.pk %}">
                 {% csrf_token %}
                 <div class="modal-header">
                     <h5 class="modal-title">Nova sessão de acompanhamento</h5>
@@ -192,24 +154,21 @@
                 </div>
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Data e Hora</label>
-                            <input type="datetime-local" name="scheduled_datetime" class="form-control" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Status</label>
+                        <div class="col-md-4 mb-3"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" class="form-control" required></div>
+                        <div class="col-md-3 mb-3"><label class="form-label">Número</label><input type="number" min="1" name="numero" class="form-control"></div>
+                        <div class="col-md-3 mb-3"><label class="form-label">Status</label>
                             <select name="status" class="form-select">
-                                <option value="scheduled">Agendada</option>
-                                <option value="completed">Concluída</option>
-                                <option value="cancelled">Cancelada</option>
-                                <option value="missed">Faltou</option>
+                                <option value="agendada">Agendada</option>
+                                <option value="realizada">Realizada</option>
+                                <option value="faltou">Faltou</option>
+                                <option value="cancelada">Cancelada</option>
                             </select>
                         </div>
+                        <div class="col-md-2 mb-3 d-flex align-items-end">
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="assinatura_confirmada" id="nova-assinatura"><label class="form-check-label" for="nova-assinatura">Assin.</label></div>
+                        </div>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control" rows="4" placeholder="Resumo da sessão"></textarea>
-                    </div>
+                    <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="4" placeholder="Resumo da sessão"></textarea></div>
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-primary">Salvar sessão</button>

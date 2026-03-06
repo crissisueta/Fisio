@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliações{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-9"><h1>Avaliações</h1></div>
+    <div class="col-md-3 text-end"><a href="{% url 'avaliacao-create' %}" class="btn btn-success">+ Nova Avaliação</a></div>
+</div>
+
+{% if avaliacoes %}
+<div class="table-responsive">
+    <table class="table table-hover table-striped align-middle">
+        <thead class="table-primary">
+            <tr><th>Paciente</th><th>Tipo</th><th>Data/Hora</th><th>Status</th><th>Ações</th></tr>
+        </thead>
+        <tbody>
+            {% for avaliacao in avaliacoes %}
+            <tr>
+                <td>{{ avaliacao.paciente.nome }}</td>
+                <td>{{ avaliacao.tipo_avaliacao.nome }}</td>
+                <td>{{ avaliacao.data_hora|date:"d/m/Y H:i" }}</td>
+                <td>{% if avaliacao.concluida %}<span class="badge bg-success">Concluída</span>{% else %}<span class="badge text-dark" style="background-color:#ffc107;">Pendente</span>{% endif %}</td>
+                <td>
+                    <div class="btn-group btn-group-custom" role="group">
+                        <a href="{% url 'avaliacao-detail' avaliacao.pk %}" class="btn btn-sm btn-info">Ver</a>
+                        <a href="{% url 'avaliacao-update' avaliacao.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                        <a href="{% url 'avaliacao-delete' avaliacao.pk %}" class="btn btn-sm btn-danger">Deletar</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Paginação">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1">Primeira</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a></li>
+        {% endif %}
+        <li class="page-item active"><a class="page-link" href="#">{{ page_obj.number }}</a></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Próxima</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Última</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="alert alert-info" role="alert">Nenhuma avaliação encontrada.</div>
+{% endif %}
+{% endblock %}

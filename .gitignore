@@ -28,7 +28,6 @@ wheels/
 *.log
 db.sqlite3
 /media
-/static
 /staticfiles
 .vscode/
 .idea/

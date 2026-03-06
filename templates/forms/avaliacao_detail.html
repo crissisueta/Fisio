@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação - {{ avaliacao.paciente.nome }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8"><h1>{{ avaliacao.tipo_avaliacao.nome }}</h1><p class="text-muted mb-0">Paciente: {{ avaliacao.paciente.nome }}</p></div>
+    <div class="col-md-4 text-end"><div class="btn-group" role="group"><a href="{% url 'avaliacao-update' avaliacao.pk %}" class="btn btn-warning">Editar</a><a href="{% url 'avaliacao-list' %}" class="btn btn-secondary">Voltar</a></div></div>
+</div>
+
+<div class="card"><div class="card-body">
+    <p><strong>Tipo:</strong> {{ avaliacao.tipo_avaliacao.nome }}</p>
+    <p><strong>Data/Hora:</strong> {{ avaliacao.data_hora|date:"d/m/Y H:i" }}</p>
+    <p><strong>Status:</strong> {% if avaliacao.concluida %}<span class="badge bg-success">Concluída</span>{% else %}<span class="badge text-dark" style="background-color:#ffc107;">Pendente</span>{% endif %}</p>
+    {% if avaliacao.observacoes %}<hr><p><strong>Observações:</strong></p><p>{{ avaliacao.observacoes|linebreaks }}</p>{% endif %}
+</div></div>
+{% endblock %}

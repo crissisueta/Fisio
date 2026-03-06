@@ -4,117 +4,91 @@
 
 ```text
 Fisio/
-├── manage.py
-├── requirements.txt
-├── README.md
-├── QUICKSTART.md
-├── STRUCTURE.md
 ├── fisio_project/
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
 ├── forms/
 │   ├── models.py
 │   ├── forms.py
 │   ├── views.py
 │   ├── urls.py
 │   ├── admin.py
-│   ├── services/
-│   │   └── calendar_service.py
+│   ├── services/calendar_service.py
 │   └── migrations/
 └── templates/
     ├── base.html
     ├── index.html
-    ├── dashboard/
-    │   └── calendar.html
-    ├── includes/
-    │   └── followup_section.html
+    ├── dashboard/calendar.html
+    ├── includes/followup_section.html
     └── forms/
-        ├── inscricao_list.html
-        ├── inscricao_form.html
-        ├── inscricao_detail.html
-        ├── inscricao_confirm_delete.html
-        ├── procedure_list.html
-        ├── procedure_form.html
-        ├── procedure_detail.html
-        └── procedure_confirm_delete.html
+        ├── inscricao_*.html
+        ├── avaliacao_*.html
+        └── procedure_*.html
 ```
 
-## Modelos atuais (`forms/models.py`)
+## Modelos atuais
 
-### `FichaInscricao`
-Paciente da clínica.
+### `Paciente`
+Dados cadastrais e clínicos básicos do paciente.
+
+### `TipoAvaliacao`
+Catálogo de tipos de avaliação.
+
+### `Avaliacao`
+Registro de avaliação não recorrente.
 
 Campos principais:
-- `nome`, `cpf`, `email`
-- `profissao`
-- `endereco`, `bairro`, `cep`
-- `telefone`, `celular`, `telefone_comercial`
-- `data_nascimento`, `data_matricula`
-- `plano`, `observacoes`
-- `created_at`, `updated_at`
-
-### `ProcedureType`
-Catálogo de tipos de procedimento.
-
-Campos:
-- `name`
-
-### `Procedure`
-Tratamento de um paciente.
-
-Campos:
-- `patient` (`FK -> FichaInscricao`)
-- `procedure_type` (`FK -> ProcedureType`)
+- `paciente`
+- `tipo_avaliacao`
+- `data_hora`
+- `concluida`
 - `observacoes`
-- `is_complete`
-- `created_at`, `updated_at`
 
-### `ProcedureSession`
-Sessões de acompanhamento de cada procedimento.
+### `TipoProcedimento`
+Catálogo de tipos de procedimento terapêutico.
 
-Campos:
-- `procedure` (`FK -> Procedure`)
-- `scheduled_datetime`
-- `notes`
-- `completed`
-- `created_at`, `updated_at`
+### `Procedimento`
+Plano terapêutico do paciente.
 
-## URLs principais
+Campos principais:
+- `paciente`
+- `tipo_procedimento`
+- `concluido`
+- `observacoes`
 
-### `fisio_project/urls.py`
-- `/` dashboard
-- `/admin/`
-- `/login/`, `/logout/`
-- `/forms/` inclui URLs do app
+### `Sessao`
+Atendimento/sessão vinculada ao procedimento.
 
-### `forms/urls.py`
-- Pacientes:
-  - `/forms/inscricao/`
-  - `/forms/inscricao/nova/`
-  - `/forms/inscricao/<id>/`
-  - `/forms/inscricao/<id>/editar/`
-  - `/forms/inscricao/<id>/deletar/`
-- Procedimentos:
-  - `/forms/procedures/`
-  - `/forms/procedures/novo/`
-  - `/forms/procedures/<id>/`
-  - `/forms/procedures/<id>/editar/`
-  - `/forms/procedures/<id>/deletar/`
-  - `/forms/procedures/<id>/toggle-complete/`
-- Sessões:
-  - `/forms/procedures/<id>/sessions/new/`
-  - `/forms/sessions/<id>/edit/`
-- Calendário:
-  - `/forms/calendar/`
-  - `/forms/calendar/events/`
+Campos principais:
+- `procedimento`
+- `data_hora`
+- `numero`
+- `status` (`agendada`, `realizada`, `faltou`, `cancelada`)
+- `assinatura_confirmada`
+- `observacoes`
+
+### `FichaExercicios` (base para evolução futura)
+Estrutura inicial para planejamento de exercícios, sem lógica avançada nesta etapa.
+
+Campos principais:
+- `paciente`
+- `procedimento` (opcional)
+- `titulo`
+- `observacoes`
+- `ativo`
+
+## URLs do app (`forms/urls.py`)
+
+- Pacientes: `/forms/inscricao/...`
+- Avaliações: `/forms/avaliacoes/...`
+- Procedimentos: `/forms/procedimentos/...`
+- Sessões: `/forms/sessoes/...`
+- Calendário: `/forms/calendario/` e `/forms/calendario/eventos/`
 
 ## Calendário
 
-`forms/services/calendar_service.py` gera eventos exclusivamente de `ProcedureSession`.
+`forms/services/calendar_service.py` consulta somente `Sessao`.
 
-- título: paciente + tipo de procedimento
-- data/hora: `scheduled_datetime`
-- cor:
-  - verde: sessão concluída
-  - amarelo: sessão pendente
+Cada evento contém:
+- paciente + tipo de procedimento
+- data/hora da sessão
+- cor do evento pelo tipo de procedimento
+- ponto visual indicando se o procedimento está concluído

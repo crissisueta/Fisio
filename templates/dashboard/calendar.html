@@ -5,46 +5,15 @@
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <style>
-    #calendar {
-        max-width: 100%;
-        margin: 0 auto;
-    }
-    .fc-event {
-        cursor: pointer;
-    }
-    .fc-event:hover {
-        opacity: 0.85;
-    }
-    .fc .fc-event.procedure-event {
-        border-width: 0;
-    }
-    .fc .fc-event-main-frame.fc-event-main-frame--with-dot {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-    .event-status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-        flex: 0 0 8px;
-    }
-    .event-status-dot.complete {
-        background-color: #198754;
-    }
-    .event-status-dot.incomplete {
-        background-color: #ffc107;
-    }
-    .legend-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 6px;
-        vertical-align: middle;
-    }
+    #calendar { max-width: 100%; margin: 0 auto; }
+    .fc-event { cursor: pointer; }
+    .fc-event:hover { opacity: 0.85; }
+    .fc .fc-event.procedure-event { border-width: 0; }
+    .fc .fc-event-main-frame.fc-event-main-frame--with-dot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .event-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 8px; }
+    .event-status-dot.complete { background-color: #198754; }
+    .event-status-dot.incomplete { background-color: #ffc107; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
 </style>
 {% endblock %}
 
@@ -52,22 +21,18 @@
 <div class="row mb-4">
     <div class="col-md-12">
         <h1>Calendário de Sessões</h1>
-        <p class="text-muted">Eventos consolidados a partir das sessões de acompanhamento.</p>
+        <p class="text-muted">Eventos consolidados a partir de registros de sessão.</p>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <div id="calendar"></div>
-    </div>
-</div>
+<div class="card"><div class="card-body"><div id="calendar"></div></div></div>
 
 <div class="row mt-3">
     <div class="col-md-12">
-        <h6>Legenda de Status:</h6>
+        <h6>Legenda de Status do Procedimento:</h6>
         <div class="d-flex flex-wrap gap-3">
-            <span><span class="legend-dot" style="background-color: #198754;"></span>Concluído</span>
-            <span><span class="legend-dot" style="background-color: #ffc107;"></span>Pendente</span>
+            <span><span class="legend-dot" style="background-color: #198754;"></span>Procedimento concluído</span>
+            <span><span class="legend-dot" style="background-color: #ffc107;"></span>Procedimento pendente</span>
         </div>
     </div>
 </div>
@@ -80,23 +45,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const calendarEl = document.getElementById('calendar');
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-        },
-        buttonText: {
-            today: 'Hoje',
-            month: 'Mês',
-            week: 'Semana',
-            day: 'Dia'
-        },
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
+        buttonText: { today: 'Hoje', month: 'Mês', week: 'Semana', day: 'Dia' },
         allDayText: 'Dia inteiro',
         moreLinkText: 'mais',
-        events: '/forms/calendar/events/',
-        eventClick: function(info) {
-            window.location.href = info.event.url;
-        },
+        events: '{% url "calendar-events" %}',
+        eventClick: function(info) { window.location.href = info.event.url; },
         eventDidMount: function(info) {
             const props = info.event.extendedProps;
             const eventEl = info.el;
@@ -111,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 frame.classList.add('fc-event-main-frame--with-dot');
                 const dot = document.createElement('span');
                 dot.className = 'event-status-dot ' + (props.is_complete ? 'complete' : 'incomplete');
-                dot.title = props.is_complete ? 'Concluído' : 'Pendente';
+                dot.title = props.is_complete ? 'Procedimento concluído' : 'Procedimento pendente';
                 frame.appendChild(dot);
             }
         },

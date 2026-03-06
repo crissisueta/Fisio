@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Deletar Avaliação{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h1 class="h3 mb-3">Deletar Avaliação</h1>
+                <p class="mb-4">Confirma remover a avaliação <strong>{{ object.tipo_avaliacao.nome }}</strong> do paciente <strong>{{ object.paciente.nome }}</strong>?</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, deletar</button>
+                    <a href="{% url 'avaliacao-detail' object.pk %}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

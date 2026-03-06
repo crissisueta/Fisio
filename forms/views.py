@@ -8,12 +8,12 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
 
-from .forms import FichaInscricaoForm, ProcedureForm, ProcedureSessionForm
-from .models import FichaInscricao, Procedure, ProcedureSession
+from .forms import AvaliacaoForm, PacienteForm, ProcedimentoForm, SessaoForm
+from .models import Avaliacao, Paciente, Procedimento, Sessao
 from .services.calendar_service import build_calendar_events
 
 
-def _session_datetime_aware(value):
+def _data_hora_ciente_fuso(value):
     if timezone.is_naive(value):
         return timezone.make_aware(value, timezone.get_current_timezone())
     return value
@@ -24,18 +24,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["inscricoes_count"] = FichaInscricao.objects.count()
-        context["procedures_count"] = Procedure.objects.count()
-        context["sessions_count"] = ProcedureSession.objects.count()
-        context["completed_procedures_count"] = Procedure.objects.filter(is_complete=True).count()
-        context["pending_procedures_count"] = Procedure.objects.filter(is_complete=False).count()
+        context["pacientes_count"] = Paciente.objects.count()
+        context["avaliacoes_count"] = Avaliacao.objects.count()
+        context["procedimentos_count"] = Procedimento.objects.count()
+        context["sessoes_count"] = Sessao.objects.count()
+        context["procedimentos_concluidos_count"] = Procedimento.objects.filter(concluido=True).count()
+        context["procedimentos_pendentes_count"] = Procedimento.objects.filter(concluido=False).count()
         return context
 
 
 @login_required
 def get_paciente_data(request, paciente_id):
-    """API endpoint para retornar dados do paciente em JSON."""
-    paciente = get_object_or_404(FichaInscricao, pk=paciente_id)
+    paciente = get_object_or_404(Paciente, pk=paciente_id)
     return JsonResponse(
         {
             "nome": paciente.nome,
@@ -45,200 +45,242 @@ def get_paciente_data(request, paciente_id):
             "telefone": paciente.telefone,
             "celular": paciente.celular,
             "idade": (timezone.now().date() - paciente.data_nascimento).days // 365,
-            "procedures_count": paciente.procedures.count(),
+            "procedimentos_count": paciente.procedimentos.count(),
+            "avaliacoes_count": paciente.avaliacoes.count(),
         }
     )
 
 
-class FichaInscricaoListView(LoginRequiredMixin, ListView):
-    model = FichaInscricao
+class PacienteListView(LoginRequiredMixin, ListView):
+    model = Paciente
     template_name = "forms/inscricao_list.html"
     context_object_name = "fichas"
     paginate_by = 10
 
 
-class FichaInscricaoDetailView(LoginRequiredMixin, DetailView):
-    model = FichaInscricao
+class PacienteDetailView(LoginRequiredMixin, DetailView):
+    model = Paciente
     template_name = "forms/inscricao_detail.html"
     context_object_name = "ficha"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["procedures"] = (
-            self.object.procedures.select_related("procedure_type")
-            .prefetch_related("sessions")
+        context["procedimentos"] = (
+            self.object.procedimentos.select_related("tipo_procedimento")
+            .prefetch_related("sessoes")
             .order_by("-created_at")
         )
+        context["avaliacoes"] = self.object.avaliacoes.select_related("tipo_avaliacao").order_by("-data_hora")
         return context
 
 
-class FichaInscricaoCreateView(LoginRequiredMixin, CreateView):
-    model = FichaInscricao
-    form_class = FichaInscricaoForm
+class PacienteCreateView(LoginRequiredMixin, CreateView):
+    model = Paciente
+    form_class = PacienteForm
     template_name = "forms/inscricao_form.html"
     success_url = reverse_lazy("inscricao-list")
 
     def form_valid(self, form):
-        messages.success(self.request, "Ficha de Inscrição criada com sucesso!")
+        messages.success(self.request, "Paciente cadastrado com sucesso.")
         return super().form_valid(form)
 
 
-class FichaInscricaoUpdateView(LoginRequiredMixin, UpdateView):
-    model = FichaInscricao
-    form_class = FichaInscricaoForm
+class PacienteUpdateView(LoginRequiredMixin, UpdateView):
+    model = Paciente
+    form_class = PacienteForm
     template_name = "forms/inscricao_form.html"
     success_url = reverse_lazy("inscricao-list")
 
     def form_valid(self, form):
-        messages.success(self.request, "Ficha de Inscrição atualizada com sucesso!")
+        messages.success(self.request, "Cadastro do paciente atualizado com sucesso.")
         return super().form_valid(form)
 
 
-class FichaInscricaoDeleteView(LoginRequiredMixin, DeleteView):
-    model = FichaInscricao
+class PacienteDeleteView(LoginRequiredMixin, DeleteView):
+    model = Paciente
     template_name = "forms/inscricao_confirm_delete.html"
     success_url = reverse_lazy("inscricao-list")
 
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, "Ficha de Inscrição deletada com sucesso!")
+        messages.success(self.request, "Paciente removido com sucesso.")
         return super().delete(request, *args, **kwargs)
 
 
-class ProcedureListView(LoginRequiredMixin, ListView):
-    model = Procedure
-    template_name = "forms/procedure_list.html"
-    context_object_name = "procedures"
+class AvaliacaoListView(LoginRequiredMixin, ListView):
+    model = Avaliacao
+    template_name = "forms/avaliacao_list.html"
+    context_object_name = "avaliacoes"
     paginate_by = 15
 
     def get_queryset(self):
-        queryset = Procedure.objects.select_related("patient", "procedure_type").order_by("-created_at")
+        return Avaliacao.objects.select_related("paciente", "tipo_avaliacao").order_by("-data_hora")
 
-        patient_id = self.request.GET.get("patient")
-        type_id = self.request.GET.get("type")
 
-        if patient_id:
-            queryset = queryset.filter(patient_id=patient_id)
-        if type_id:
-            queryset = queryset.filter(procedure_type_id=type_id)
+class AvaliacaoDetailView(LoginRequiredMixin, DetailView):
+    model = Avaliacao
+    template_name = "forms/avaliacao_detail.html"
+    context_object_name = "avaliacao"
 
+
+class AvaliacaoCreateView(LoginRequiredMixin, CreateView):
+    model = Avaliacao
+    form_class = AvaliacaoForm
+    template_name = "forms/avaliacao_form.html"
+    success_url = reverse_lazy("avaliacao-list")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Avaliação registrada com sucesso.")
+        return super().form_valid(form)
+
+
+class AvaliacaoUpdateView(LoginRequiredMixin, UpdateView):
+    model = Avaliacao
+    form_class = AvaliacaoForm
+    template_name = "forms/avaliacao_form.html"
+    success_url = reverse_lazy("avaliacao-list")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Avaliação atualizada com sucesso.")
+        return super().form_valid(form)
+
+
+class AvaliacaoDeleteView(LoginRequiredMixin, DeleteView):
+    model = Avaliacao
+    template_name = "forms/avaliacao_confirm_delete.html"
+    success_url = reverse_lazy("avaliacao-list")
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "Avaliação removida com sucesso.")
+        return super().delete(request, *args, **kwargs)
+
+
+class ProcedimentoListView(LoginRequiredMixin, ListView):
+    model = Procedimento
+    template_name = "forms/procedure_list.html"
+    context_object_name = "procedimentos"
+    paginate_by = 15
+
+    def get_queryset(self):
+        queryset = Procedimento.objects.select_related("paciente", "tipo_procedimento").order_by("-created_at")
+        paciente_id = self.request.GET.get("paciente")
+        tipo_id = self.request.GET.get("tipo")
+        if paciente_id:
+            queryset = queryset.filter(paciente_id=paciente_id)
+        if tipo_id:
+            queryset = queryset.filter(tipo_procedimento_id=tipo_id)
         return queryset
 
 
-class ProcedureDetailView(LoginRequiredMixin, DetailView):
-    model = Procedure
+class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
+    model = Procedimento
     template_name = "forms/procedure_detail.html"
-    context_object_name = "procedure"
+    context_object_name = "procedimento"
 
     def get_queryset(self):
-        return Procedure.objects.select_related("patient", "procedure_type").prefetch_related("sessions")
+        return Procedimento.objects.select_related("paciente", "tipo_procedimento").prefetch_related("sessoes")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        all_sessions = list(self.object.sessions.order_by("scheduled_datetime"))
-        now = timezone.now()
+        todas_sessoes = list(self.object.sessoes.order_by("data_hora"))
+        agora = timezone.now()
 
-        upcoming_sessions = [
-            sess for sess in all_sessions
-            if _session_datetime_aware(sess.scheduled_datetime) >= now
-            and sess.status in [ProcedureSession.STATUS_SCHEDULED]
+        sessoes_futuras = [
+            sess for sess in todas_sessoes
+            if _data_hora_ciente_fuso(sess.data_hora) >= agora and sess.status == Sessao.STATUS_AGENDADA
         ]
-        past_sessions = [sess for sess in all_sessions if sess not in upcoming_sessions]
+        sessoes_passadas = [sess for sess in todas_sessoes if sess not in sessoes_futuras]
 
-        context["next_upcoming_session"] = upcoming_sessions[0] if upcoming_sessions else None
-        context["upcoming_sessions"] = upcoming_sessions
-        context["past_sessions"] = past_sessions
-        context["session_form"] = ProcedureSessionForm()
+        context["proxima_sessao"] = sessoes_futuras[0] if sessoes_futuras else None
+        context["sessoes_futuras"] = sessoes_futuras
+        context["sessoes_passadas"] = sessoes_passadas
+        context["sessao_form"] = SessaoForm()
         return context
 
 
-class ProcedureCreateView(LoginRequiredMixin, CreateView):
-    model = Procedure
-    form_class = ProcedureForm
+class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
+    model = Procedimento
+    form_class = ProcedimentoForm
     template_name = "forms/procedure_form.html"
     success_url = reverse_lazy("procedure-list")
 
     def form_valid(self, form):
-        messages.success(self.request, "Procedimento criado com sucesso!")
+        messages.success(self.request, "Procedimento criado com sucesso.")
         return super().form_valid(form)
 
 
-class ProcedureUpdateView(LoginRequiredMixin, UpdateView):
-    model = Procedure
-    form_class = ProcedureForm
+class ProcedimentoUpdateView(LoginRequiredMixin, UpdateView):
+    model = Procedimento
+    form_class = ProcedimentoForm
     template_name = "forms/procedure_form.html"
     success_url = reverse_lazy("procedure-list")
 
     def form_valid(self, form):
-        messages.success(self.request, "Procedimento atualizado com sucesso!")
+        messages.success(self.request, "Procedimento atualizado com sucesso.")
         return super().form_valid(form)
 
 
-class ProcedureDeleteView(LoginRequiredMixin, DeleteView):
-    model = Procedure
+class ProcedimentoDeleteView(LoginRequiredMixin, DeleteView):
+    model = Procedimento
     template_name = "forms/procedure_confirm_delete.html"
     success_url = reverse_lazy("procedure-list")
 
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, "Procedimento deletado com sucesso!")
+        messages.success(self.request, "Procedimento removido com sucesso.")
         return super().delete(request, *args, **kwargs)
 
 
 @login_required
 @require_POST
-def toggle_procedure_complete(request, pk):
-    procedure = get_object_or_404(Procedure, pk=pk)
-    procedure.is_complete = not procedure.is_complete
-    procedure.save(update_fields=["is_complete", "updated_at"])
-    status = "concluído" if procedure.is_complete else "pendente"
-    messages.success(request, f"Procedimento marcado como {status}.")
-    return redirect("procedure-detail", pk=procedure.pk)
+def toggle_procedimento_concluido(request, pk):
+    procedimento = get_object_or_404(Procedimento, pk=pk)
+    procedimento.concluido = not procedimento.concluido
+    procedimento.save(update_fields=["concluido", "updated_at"])
+    estado = "concluído" if procedimento.concluido else "pendente"
+    messages.success(request, f"Procedimento marcado como {estado}.")
+    return redirect("procedure-detail", pk=procedimento.pk)
 
 
 @login_required
 @require_POST
-def add_procedure_session(request, pk):
-    procedure = get_object_or_404(Procedure, pk=pk)
-    form = ProcedureSessionForm(request.POST)
-
+def add_sessao(request, pk):
+    procedimento = get_object_or_404(Procedimento, pk=pk)
+    form = SessaoForm(request.POST)
     if form.is_valid():
-        session = form.save(commit=False)
-        session.procedure = procedure
-        session.save()
-        messages.success(request, "Sessão adicionada com sucesso!")
+        sessao = form.save(commit=False)
+        sessao.procedimento = procedimento
+        sessao.save()
+        messages.success(request, "Sessão adicionada com sucesso.")
     else:
         messages.error(request, "Não foi possível adicionar a sessão. Verifique os dados informados.")
-
-    return redirect("procedure-detail", pk=procedure.pk)
+    return redirect("procedure-detail", pk=procedimento.pk)
 
 
 @login_required
 @require_POST
-def edit_procedure_session(request, session_id):
-    session = get_object_or_404(ProcedureSession, pk=session_id)
-    form = ProcedureSessionForm(request.POST, instance=session)
-
+def edit_sessao(request, session_id):
+    sessao = get_object_or_404(Sessao, pk=session_id)
+    form = SessaoForm(request.POST, instance=sessao)
     if form.is_valid():
         form.save()
-        messages.success(request, "Sessão atualizada com sucesso!")
+        messages.success(request, "Sessão atualizada com sucesso.")
     else:
         messages.error(request, "Não foi possível atualizar a sessão.")
-
-    return redirect("procedure-detail", pk=session.procedure_id)
+    return redirect("procedure-detail", pk=sessao.procedimento_id)
 
 
 @login_required
 @require_POST
-def update_procedure_session_status(request, session_id, status):
-    session = get_object_or_404(ProcedureSession, pk=session_id)
-    allowed_statuses = {choice[0] for choice in ProcedureSession.STATUS_CHOICES}
-    if status not in allowed_statuses:
+def update_status_sessao(request, session_id, status):
+    sessao = get_object_or_404(Sessao, pk=session_id)
+    allowed = {choice[0] for choice in Sessao.STATUS_CHOICES}
+    if status not in allowed:
         messages.error(request, "Status de sessão inválido.")
-        return redirect("procedure-detail", pk=session.procedure_id)
+        return redirect("procedure-detail", pk=sessao.procedimento_id)
 
-    session.status = status
-    session.save(update_fields=["status", "completed", "updated_at"])
+    sessao.status = status
+    sessao.save(update_fields=["status", "updated_at"])
     messages.success(request, "Status da sessão atualizado com sucesso.")
-    return redirect("procedure-detail", pk=session.procedure_id)
+    return redirect("procedure-detail", pk=sessao.procedimento_id)
 
 
 @login_required

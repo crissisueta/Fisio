@@ -1,61 +1,49 @@
 {% extends 'base.html' %}
 
-{% block title %}Painel - Sistema de Gestão de Fichas{% endblock %}
+{% block title %}Painel - Sistema de Gestão Clínica{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-12">
-        <h1 class="mb-4">Painel</h1>
-    </div>
+    <div class="col-md-12"><h1 class="mb-4">Painel</h1></div>
 </div>
 
 <div class="row">
     <div class="col-md-4 mb-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Inscrições</h5>
-                <p class="card-text fs-4">{{ inscricoes_count }}</p>
-                <a href="{% url 'inscricao-list' %}" class="btn btn-primary btn-sm">Ver tudo</a>
-            </div>
-        </div>
+        <div class="card text-center"><div class="card-body">
+            <h5 class="card-title">Pacientes</h5>
+            <p class="card-text fs-4">{{ pacientes_count }}</p>
+            <a href="{% url 'inscricao-list' %}" class="btn btn-primary btn-sm">Ver tudo</a>
+        </div></div>
     </div>
 
     <div class="col-md-4 mb-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Procedimentos</h5>
-                <p class="card-text fs-4">{{ procedures_count }}</p>
-                <a href="{% url 'procedure-list' %}" class="btn btn-primary btn-sm">Ver tudo</a>
-            </div>
-        </div>
+        <div class="card text-center"><div class="card-body">
+            <h5 class="card-title">Avaliações</h5>
+            <p class="card-text fs-4">{{ avaliacoes_count }}</p>
+            <a href="{% url 'avaliacao-list' %}" class="btn btn-primary btn-sm">Ver tudo</a>
+        </div></div>
     </div>
 
     <div class="col-md-4 mb-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Sessões</h5>
-                <p class="card-text fs-4">{{ sessions_count }}</p>
-                <a href="{% url 'calendar-dashboard' %}" class="btn btn-primary btn-sm">Ver calendário</a>
-            </div>
-        </div>
+        <div class="card text-center"><div class="card-body">
+            <h5 class="card-title">Sessões</h5>
+            <p class="card-text fs-4">{{ sessoes_count }}</p>
+            <a href="{% url 'calendar-dashboard' %}" class="btn btn-primary btn-sm">Ver calendário</a>
+        </div></div>
     </div>
 
     <div class="col-md-6 mb-3">
-        <div class="card text-center border-success">
-            <div class="card-body">
-                <h5 class="card-title">Procedimentos Concluídos</h5>
-                <p class="card-text fs-4 text-success">{{ completed_procedures_count }}</p>
-            </div>
-        </div>
+        <div class="card text-center border-success"><div class="card-body">
+            <h5 class="card-title">Procedimentos Concluídos</h5>
+            <p class="card-text fs-4 text-success">{{ procedimentos_concluidos_count }}</p>
+        </div></div>
     </div>
 
     <div class="col-md-6 mb-3">
-        <div class="card text-center border-warning">
-            <div class="card-body">
-                <h5 class="card-title">Procedimentos Pendentes</h5>
-                <p class="card-text fs-4 text-warning">{{ pending_procedures_count }}</p>
-            </div>
-        </div>
+        <div class="card text-center border-warning"><div class="card-body">
+            <h5 class="card-title">Procedimentos Pendentes</h5>
+            <p class="card-text fs-4 text-warning">{{ procedimentos_pendentes_count }}</p>
+        </div></div>
     </div>
 </div>
 
@@ -65,7 +53,8 @@
     <div class="col-md-12">
         <h4>Ações Rápidas</h4>
         <div class="d-grid gap-2 d-sm-flex">
-            <a href="{% url 'inscricao-create' %}" class="btn btn-success">+ Nova Inscrição</a>
+            <a href="{% url 'inscricao-create' %}" class="btn btn-success">+ Novo Paciente</a>
+            <a href="{% url 'avaliacao-create' %}" class="btn btn-success">+ Nova Avaliação</a>
             <a href="{% url 'procedure-create' %}" class="btn btn-success">+ Novo Procedimento</a>
         </div>
     </div>

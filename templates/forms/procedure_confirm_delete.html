@@ -9,8 +9,8 @@
             <div class="card-body text-center">
                 <h1 class="h3 mb-3">Deletar Procedimento</h1>
                 <p class="mb-4">
-                    Confirma remover o procedimento <strong>{{ object.procedure_type.name }}</strong>
-                    do paciente <strong>{{ object.patient.nome }}</strong>?
+                    Confirma remover o procedimento <strong>{{ object.tipo_procedimento.nome }}</strong>
+                    do paciente <strong>{{ object.paciente.nome }}</strong>?
                 </p>
                 <form method="post">
                     {% csrf_token %}

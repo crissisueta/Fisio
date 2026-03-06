@@ -1,44 +1,25 @@
 {% extends 'base.html' %}
 
-{% block title %}Procedimento - {{ procedure.patient.nome }}{% endblock %}
+{% block title %}Procedimento - {{ procedimento.paciente.nome }}{% endblock %}
 {% block extra_css %}
 <style>
-    .summary-grid {
-        display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    }
-    .summary-item {
-        border: 1px solid #e9ecef;
-        border-radius: 10px;
-        padding: 12px;
-        background: #fff;
-    }
-    .summary-item .label {
-        font-size: 0.8rem;
-        color: #6c757d;
-        display: block;
-    }
-    .timeline-col {
-        border-left: 3px solid #dee2e6;
-        padding-left: 16px;
-    }
-    .session-card.next-session {
-        border: 2px solid #0d6efd;
-        box-shadow: 0 0.3rem 0.8rem rgba(13, 110, 253, 0.15);
-    }
+    .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+    .summary-item { border: 1px solid #e9ecef; border-radius: 10px; padding: 12px; background: #fff; }
+    .summary-item .label { font-size: 0.8rem; color: #6c757d; display: block; }
+    .timeline-col { border-left: 3px solid #dee2e6; padding-left: 16px; }
+    .sessao-card.proxima-sessao { border: 2px solid #0d6efd; box-shadow: 0 0.3rem 0.8rem rgba(13, 110, 253, 0.15); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-8">
-        <h1 class="mb-1">{{ procedure.procedure_type.name }}</h1>
-        <p class="text-muted mb-0">Histórico terapêutico de {{ procedure.patient.nome }}</p>
+        <h1 class="mb-1">{{ procedimento.tipo_procedimento.nome }}</h1>
+        <p class="text-muted mb-0">Histórico terapêutico de {{ procedimento.paciente.nome }}</p>
     </div>
     <div class="col-md-4 text-end">
         <div class="btn-group" role="group">
-            <a href="{% url 'procedure-update' procedure.pk %}" class="btn btn-warning">Editar</a>
+            <a href="{% url 'procedure-update' procedimento.pk %}" class="btn btn-warning">Editar</a>
             <a href="{% url 'procedure-list' %}" class="btn btn-secondary">Voltar</a>
         </div>
     </div>
@@ -48,9 +29,9 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h5 class="card-title mb-0">Resumo do Procedimento</h5>
-            <form method="post" action="{% url 'procedure-toggle-complete' procedure.pk %}">
+            <form method="post" action="{% url 'procedure-toggle-complete' procedimento.pk %}">
                 {% csrf_token %}
-                {% if procedure.is_complete %}
+                {% if procedimento.concluido %}
                 <button class="btn btn-success btn-sm" type="submit">Procedimento concluído</button>
                 {% else %}
                 <button class="btn btn-outline-success btn-sm" type="submit">Marcar como concluído</button>
@@ -59,30 +40,18 @@
         </div>
 
         <div class="summary-grid mb-3">
-            <div class="summary-item">
-                <span class="label">Paciente</span>
-                <strong>{{ procedure.patient.nome }}</strong>
-            </div>
-            <div class="summary-item">
-                <span class="label">Tipo</span>
-                <strong>{{ procedure.procedure_type.name }}</strong>
-            </div>
+            <div class="summary-item"><span class="label">Paciente</span><strong>{{ procedimento.paciente.nome }}</strong></div>
+            <div class="summary-item"><span class="label">Tipo</span><strong>{{ procedimento.tipo_procedimento.nome }}</strong></div>
             <div class="summary-item">
                 <span class="label">Status</span>
-                {% if procedure.is_complete %}
-                <span class="badge bg-success">Concluído</span>
-                {% else %}
-                <span class="badge text-dark" style="background-color: #ffc107;">Em andamento</span>
-                {% endif %}
+                {% if procedimento.concluido %}<span class="badge bg-success">Concluído</span>{% else %}<span class="badge text-dark" style="background-color:#ffc107;">Em andamento</span>{% endif %}
             </div>
-            <div class="summary-item">
-                <span class="label">Criado em</span>
-                <strong>{{ procedure.created_at|date:"d/m/Y H:i" }}</strong>
-            </div>
+            <div class="summary-item"><span class="label">Criado em</span><strong>{{ procedimento.created_at|date:"d/m/Y H:i" }}</strong></div>
         </div>
-        {% if procedure.observacoes %}
+
+        {% if procedimento.observacoes %}
         <p class="mb-0"><strong>Observações clínicas:</strong></p>
-        <p class="text-muted mb-0">{{ procedure.observacoes|linebreaks }}</p>
+        <p class="text-muted mb-0">{{ procedimento.observacoes|linebreaks }}</p>
         {% endif %}
     </div>
 </div>
