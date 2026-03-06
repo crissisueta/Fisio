@@ -4,6 +4,19 @@ Django settings for fisio_project project.
 
 from pathlib import Path
 
+# load local environment variables from env/Fisio.env when present
+# this lets developers run the project locally without editing settings.py
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+if load_dotenv:
+    base_dir = Path(__file__).resolve().parent.parent
+    env_path = base_dir / 'env' / 'Fisio.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -99,6 +112,9 @@ TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 
 USE_TZ = True
+
+# Email backend
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 
 
 # Static files (CSS, JavaScript, Images)

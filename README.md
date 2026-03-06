@@ -47,6 +47,22 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 5. Configure variáveis de ambiente
+
+O projeto utiliza variáveis de ambiente em vez de configurações hard‑coded. Para facilitar o desenvolvimento existe um arquivo
+`env/Fisio.env` que já contém os valores usados em produção. Antes de executar
+comandos Django carregue essas variáveis:
+
+```bash
+# opção automática (recomendado a partir de agora, o arquivo já é lido pelo manage.py/wsgi.py):
+# basta garantir que `env/Fisio.env` existe e contém os valores desejados
+
+# ou manualmente:
+set -a && source env/Fisio.env && set +a
+```
+
+Em sistemas Windows use `set`/`setx` ou adapte os comandos conforme necessário.
+
 ### 5. Execute as migrações do banco de dados
 
 ```bash
