@@ -1,434 +1,251 @@
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse_lazy
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse_lazy
 from django.utils import timezone
-from .models import (
-    FichaInscricao, AnamneseGeral, AnamneseAcupuntura,
-    FichaDrenagem, FichaExercicios
-)
-from .forms import (
-    FichaInscricaoForm, AnamneseGeralForm, AnamneseAcupunturaForm,
-    FichaDrenagemForm, FichaExerciciosForm
-)
+from django.views.decorators.http import require_POST
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
+
+from .forms import FichaInscricaoForm, ProcedureForm, ProcedureSessionForm
+from .models import FichaInscricao, Procedure, ProcedureSession
 from .services.calendar_service import build_calendar_events
 
 
+def _session_datetime_aware(value):
+    if timezone.is_naive(value):
+        return timezone.make_aware(value, timezone.get_current_timezone())
+    return value
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
-    template_name = 'index.html'
-    
+    template_name = "index.html"
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['inscricoes_count'] = FichaInscricao.objects.count()
-        context['anamneses_count'] = AnamneseGeral.objects.count()
-        context['acupuntura_count'] = AnamneseAcupuntura.objects.count()
-        context['drenagem_count'] = FichaDrenagem.objects.count()
-        context['exercicios_count'] = FichaExercicios.objects.count()
+        context["inscricoes_count"] = FichaInscricao.objects.count()
+        context["procedures_count"] = Procedure.objects.count()
+        context["sessions_count"] = ProcedureSession.objects.count()
+        context["completed_procedures_count"] = Procedure.objects.filter(is_complete=True).count()
+        context["pending_procedures_count"] = Procedure.objects.filter(is_complete=False).count()
         return context
 
 
 @login_required
-
 def get_paciente_data(request, paciente_id):
-    """API endpoint para retornar dados do paciente em JSON"""
-    try:
-        paciente = FichaInscricao.objects.get(pk=paciente_id)
-        return JsonResponse({
-            'nome': paciente.nome,
-            'profissao': paciente.profissao,
-            'data_nascimento': paciente.data_nascimento.isoformat(),
-            'endereco': paciente.endereco,
-            'telefone': paciente.telefone,
-            'celular': paciente.celular,
-            'idade': (timezone.now().date() - paciente.data_nascimento).days // 365,  # idade estimada
-        })
-    except FichaInscricao.DoesNotExist:
-        return JsonResponse({'error': 'Paciente não encontrado'}, status=404)
+    """API endpoint para retornar dados do paciente em JSON."""
+    paciente = get_object_or_404(FichaInscricao, pk=paciente_id)
+    return JsonResponse(
+        {
+            "nome": paciente.nome,
+            "profissao": paciente.profissao,
+            "data_nascimento": paciente.data_nascimento.isoformat(),
+            "endereco": paciente.endereco,
+            "telefone": paciente.telefone,
+            "celular": paciente.celular,
+            "idade": (timezone.now().date() - paciente.data_nascimento).days // 365,
+            "procedures_count": paciente.procedures.count(),
+        }
+    )
 
 
-# FichaInscricao Views
 class FichaInscricaoListView(LoginRequiredMixin, ListView):
     model = FichaInscricao
-    template_name = 'forms/inscricao_list.html'
-    context_object_name = 'fichas'
+    template_name = "forms/inscricao_list.html"
+    context_object_name = "fichas"
     paginate_by = 10
 
 
 class FichaInscricaoDetailView(LoginRequiredMixin, DetailView):
     model = FichaInscricao
-    template_name = 'forms/inscricao_detail.html'
-    context_object_name = 'ficha'
-    
+    template_name = "forms/inscricao_detail.html"
+    context_object_name = "ficha"
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        ficha = self.get_object()
-        context['anamneses_geral'] = ficha.anamneses_geral.all()
-        context['anamneses_acupuntura'] = ficha.anamneses_acupuntura.all()
-        context['fichas_drenagem'] = ficha.fichas_drenagem.all()
-        context['fichas_exercicios'] = ficha.fichas_exercicios.all()
+        context["procedures"] = (
+            self.object.procedures.select_related("procedure_type")
+            .prefetch_related("sessions")
+            .order_by("-created_at")
+        )
         return context
 
 
 class FichaInscricaoCreateView(LoginRequiredMixin, CreateView):
     model = FichaInscricao
     form_class = FichaInscricaoForm
-    template_name = 'forms/inscricao_form.html'
-    success_url = reverse_lazy('inscricao-list')
+    template_name = "forms/inscricao_form.html"
+    success_url = reverse_lazy("inscricao-list")
 
     def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Inscrição criada com sucesso!')
+        messages.success(self.request, "Ficha de Inscrição criada com sucesso!")
         return super().form_valid(form)
 
 
 class FichaInscricaoUpdateView(LoginRequiredMixin, UpdateView):
     model = FichaInscricao
     form_class = FichaInscricaoForm
-    template_name = 'forms/inscricao_form.html'
-    success_url = reverse_lazy('inscricao-list')
+    template_name = "forms/inscricao_form.html"
+    success_url = reverse_lazy("inscricao-list")
 
     def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Inscrição atualizada com sucesso!')
+        messages.success(self.request, "Ficha de Inscrição atualizada com sucesso!")
         return super().form_valid(form)
 
 
 class FichaInscricaoDeleteView(LoginRequiredMixin, DeleteView):
     model = FichaInscricao
-    template_name = 'forms/inscricao_confirm_delete.html'
-    success_url = reverse_lazy('inscricao-list')
+    template_name = "forms/inscricao_confirm_delete.html"
+    success_url = reverse_lazy("inscricao-list")
 
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Ficha de Inscrição deletada com sucesso!')
+        messages.success(self.request, "Ficha de Inscrição deletada com sucesso!")
         return super().delete(request, *args, **kwargs)
 
 
-# AnamneseGeral Views
-class AnamneseGeralListView(LoginRequiredMixin, ListView):
-    model = AnamneseGeral
-    template_name = 'forms/anamnese_geral_list.html'
-    context_object_name = 'fichas'
-    paginate_by = 10
+class ProcedureListView(LoginRequiredMixin, ListView):
+    model = Procedure
+    template_name = "forms/procedure_list.html"
+    context_object_name = "procedures"
+    paginate_by = 15
+
+    def get_queryset(self):
+        queryset = Procedure.objects.select_related("patient", "procedure_type").order_by("-created_at")
+
+        patient_id = self.request.GET.get("patient")
+        type_id = self.request.GET.get("type")
+
+        if patient_id:
+            queryset = queryset.filter(patient_id=patient_id)
+        if type_id:
+            queryset = queryset.filter(procedure_type_id=type_id)
+
+        return queryset
 
 
-class AnamneseGeralDetailView(LoginRequiredMixin, DetailView):
-    model = AnamneseGeral
-    template_name = 'forms/anamnese_geral_detail.html'
-    context_object_name = 'ficha'
+class ProcedureDetailView(LoginRequiredMixin, DetailView):
+    model = Procedure
+    template_name = "forms/procedure_detail.html"
+    context_object_name = "procedure"
+
+    def get_queryset(self):
+        return Procedure.objects.select_related("patient", "procedure_type").prefetch_related("sessions")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        obj = self.get_object()
-        from django.contrib.contenttypes.models import ContentType
-        from .models import FollowUpSession
-        ct = ContentType.objects.get_for_model(obj)
-        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
-        context['model_slug'] = 'anamnese-geral'
+        all_sessions = list(self.object.sessions.order_by("scheduled_datetime"))
+        now = timezone.now()
+
+        upcoming_sessions = [
+            sess for sess in all_sessions
+            if _session_datetime_aware(sess.scheduled_datetime) >= now
+            and sess.status in [ProcedureSession.STATUS_SCHEDULED]
+        ]
+        past_sessions = [sess for sess in all_sessions if sess not in upcoming_sessions]
+
+        context["next_upcoming_session"] = upcoming_sessions[0] if upcoming_sessions else None
+        context["upcoming_sessions"] = upcoming_sessions
+        context["past_sessions"] = past_sessions
+        context["session_form"] = ProcedureSessionForm()
         return context
 
 
-class AnamneseGeralCreateView(LoginRequiredMixin, CreateView):
-    model = AnamneseGeral
-    form_class = AnamneseGeralForm
-    template_name = 'forms/anamnese_geral_form.html'
-    success_url = reverse_lazy('anamnese-geral-list')
+class ProcedureCreateView(LoginRequiredMixin, CreateView):
+    model = Procedure
+    form_class = ProcedureForm
+    template_name = "forms/procedure_form.html"
+    success_url = reverse_lazy("procedure-list")
 
     def form_valid(self, form):
-        messages.success(self.request, 'Anamnese Geral criada com sucesso!')
+        messages.success(self.request, "Procedimento criado com sucesso!")
         return super().form_valid(form)
 
 
-class AnamneseGeralUpdateView(LoginRequiredMixin, UpdateView):
-    model = AnamneseGeral
-    form_class = AnamneseGeralForm
-    template_name = 'forms/anamnese_geral_form.html'
-    success_url = reverse_lazy('anamnese-geral-list')
+class ProcedureUpdateView(LoginRequiredMixin, UpdateView):
+    model = Procedure
+    form_class = ProcedureForm
+    template_name = "forms/procedure_form.html"
+    success_url = reverse_lazy("procedure-list")
 
     def form_valid(self, form):
-        messages.success(self.request, 'Anamnese Geral atualizada com sucesso!')
+        messages.success(self.request, "Procedimento atualizado com sucesso!")
         return super().form_valid(form)
 
 
-class AnamneseGeralDeleteView(LoginRequiredMixin, DeleteView):
-    model = AnamneseGeral
-    template_name = 'forms/anamnese_geral_confirm_delete.html'
-    success_url = reverse_lazy('anamnese-geral-list')
+class ProcedureDeleteView(LoginRequiredMixin, DeleteView):
+    model = Procedure
+    template_name = "forms/procedure_confirm_delete.html"
+    success_url = reverse_lazy("procedure-list")
 
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Anamnese Geral deletada com sucesso!')
+        messages.success(self.request, "Procedimento deletado com sucesso!")
         return super().delete(request, *args, **kwargs)
 
 
-# AnamneseAcupuntura Views
-class AnamneseAcupunturaListView(LoginRequiredMixin, ListView):
-    model = AnamneseAcupuntura
-    template_name = 'forms/anamnese_acupuntura_list.html'
-    context_object_name = 'fichas'
-    paginate_by = 10
-
-
-class AnamneseAcupunturaDetailView(LoginRequiredMixin, DetailView):
-    model = AnamneseAcupuntura
-    template_name = 'forms/anamnese_acupuntura_detail.html'
-    context_object_name = 'ficha'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        obj = self.get_object()
-        from django.contrib.contenttypes.models import ContentType
-        from .models import FollowUpSession
-        ct = ContentType.objects.get_for_model(obj)
-        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
-        context['model_slug'] = 'anamnese-acupuntura'
-        return context
-
-
-class AnamneseAcupunturaCreateView(LoginRequiredMixin, CreateView):
-    model = AnamneseAcupuntura
-    form_class = AnamneseAcupunturaForm
-    template_name = 'forms/anamnese_acupuntura_form.html'
-    success_url = reverse_lazy('anamnese-acupuntura-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Anamnese - Acupuntura criada com sucesso!')
-        return super().form_valid(form)
-
-
-class AnamneseAcupunturaUpdateView(LoginRequiredMixin, UpdateView):
-    model = AnamneseAcupuntura
-    form_class = AnamneseAcupunturaForm
-    template_name = 'forms/anamnese_acupuntura_form.html'
-    success_url = reverse_lazy('anamnese-acupuntura-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Anamnese - Acupuntura atualizada com sucesso!')
-        return super().form_valid(form)
-
-
-class AnamneseAcupunturaDeleteView(LoginRequiredMixin, DeleteView):
-    model = AnamneseAcupuntura
-    template_name = 'forms/anamnese_acupuntura_confirm_delete.html'
-    success_url = reverse_lazy('anamnese-acupuntura-list')
-
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Anamnese - Acupuntura deletada com sucesso!')
-        return super().delete(request, *args, **kwargs)
-
-
-# FichaDrenagem Views
-class FichaDrenagemListView(LoginRequiredMixin, ListView):
-    model = FichaDrenagem
-    template_name = 'forms/drenagem_list.html'
-    context_object_name = 'fichas'
-    paginate_by = 10
-
-
-class FichaDrenagemDetailView(LoginRequiredMixin, DetailView):
-    model = FichaDrenagem
-    template_name = 'forms/drenagem_detail.html'
-    context_object_name = 'ficha'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        obj = self.get_object()
-        from django.contrib.contenttypes.models import ContentType
-        from .models import FollowUpSession
-        ct = ContentType.objects.get_for_model(obj)
-        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
-        context['model_slug'] = 'drenagem'
-        return context
-
-
-class FichaDrenagemCreateView(LoginRequiredMixin, CreateView):
-    model = FichaDrenagem
-    form_class = FichaDrenagemForm
-    template_name = 'forms/drenagem_form.html'
-    success_url = reverse_lazy('drenagem-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Drenagem criada com sucesso!')
-        return super().form_valid(form)
-
-
-class FichaDrenagemUpdateView(LoginRequiredMixin, UpdateView):
-    model = FichaDrenagem
-    form_class = FichaDrenagemForm
-    template_name = 'forms/drenagem_form.html'
-    success_url = reverse_lazy('drenagem-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Drenagem atualizada com sucesso!')
-        return super().form_valid(form)
-
-
-class FichaDrenagemDeleteView(LoginRequiredMixin, DeleteView):
-    model = FichaDrenagem
-    template_name = 'forms/drenagem_confirm_delete.html'
-    success_url = reverse_lazy('drenagem-list')
-
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Ficha de Drenagem deletada com sucesso!')
-        return super().delete(request, *args, **kwargs)
-
-
-# FichaExercicios Views
-class FichaExerciciosListView(LoginRequiredMixin, ListView):
-    model = FichaExercicios
-    template_name = 'forms/exercicios_list.html'
-    context_object_name = 'fichas'
-    paginate_by = 10
-
-
-class FichaExerciciosDetailView(LoginRequiredMixin, DetailView):
-    model = FichaExercicios
-    template_name = 'forms/exercicios_detail.html'
-    context_object_name = 'ficha'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        obj = self.get_object()
-        from django.contrib.contenttypes.models import ContentType
-        from .models import FollowUpSession
-        ct = ContentType.objects.get_for_model(obj)
-        context['sessions'] = FollowUpSession.objects.filter(content_type=ct, object_id=obj.pk).order_by('session_date')
-        context['model_slug'] = 'exercicios'
-        return context
-
-
-class FichaExerciciosCreateView(LoginRequiredMixin, CreateView):
-    model = FichaExercicios
-    form_class = FichaExerciciosForm
-    template_name = 'forms/exercicios_form.html'
-    success_url = reverse_lazy('exercicios-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Exercícios criada com sucesso!')
-        return super().form_valid(form)
-
-
-class FichaExerciciosUpdateView(LoginRequiredMixin, UpdateView):
-    model = FichaExercicios
-    form_class = FichaExerciciosForm
-    template_name = 'forms/exercicios_form.html'
-    success_url = reverse_lazy('exercicios-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Ficha de Exercícios atualizada com sucesso!')
-        return super().form_valid(form)
-
-
-class FichaExerciciosDeleteView(LoginRequiredMixin, DeleteView):
-    model = FichaExercicios
-    template_name = 'forms/exercicios_confirm_delete.html'
-    success_url = reverse_lazy('exercicios-list')
-
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Ficha de Exercícios deletada com sucesso!')
-        return super().delete(request, *args, **kwargs)
-
-# Toggle Concluido Views
 @login_required
-
-# all toggle endpoints require login
-def toggle_anamnese_geral_concluido(request, pk):
-    """Mark/unmark AnamneseGeral as concluída"""
-    ficha = get_object_or_404(AnamneseGeral, pk=pk)
-    ficha.concluido = not ficha.concluido
-    ficha.save()
-    status = 'marcada como concluída' if ficha.concluido else 'marcada como pendente'
-    messages.success(request, f'Anamnese Geral {status}!')
-    return redirect('anamnese-geral-detail', pk=pk)
+@require_POST
+def toggle_procedure_complete(request, pk):
+    procedure = get_object_or_404(Procedure, pk=pk)
+    procedure.is_complete = not procedure.is_complete
+    procedure.save(update_fields=["is_complete", "updated_at"])
+    status = "concluído" if procedure.is_complete else "pendente"
+    messages.success(request, f"Procedimento marcado como {status}.")
+    return redirect("procedure-detail", pk=procedure.pk)
 
 
 @login_required
-def toggle_anamnese_acupuntura_concluido(request, pk):
-    """Mark/unmark AnamneseAcupuntura as concluída"""
-    ficha = get_object_or_404(AnamneseAcupuntura, pk=pk)
-    ficha.concluido = not ficha.concluido
-    ficha.save()
-    status = 'marcada como concluída' if ficha.concluido else 'marcada como pendente'
-    messages.success(request, f'Anamnese - Acupuntura {status}!')
-    return redirect('anamnese-acupuntura-detail', pk=pk)
+@require_POST
+def add_procedure_session(request, pk):
+    procedure = get_object_or_404(Procedure, pk=pk)
+    form = ProcedureSessionForm(request.POST)
 
-
-@login_required
-def toggle_drenagem_concluido(request, pk):
-    """Mark/unmark FichaDrenagem as concluída"""
-    ficha = get_object_or_404(FichaDrenagem, pk=pk)
-    ficha.concluido = not ficha.concluido
-    ficha.save()
-    status = 'marcada como concluída' if ficha.concluido else 'marcada como pendente'
-    messages.success(request, f'Ficha de Drenagem {status}!')
-    return redirect('drenagem-detail', pk=pk)
-
-
-@login_required
-def toggle_exercicios_concluido(request, pk):
-    """Mark/unmark FichaExercicios as concluída"""
-    ficha = get_object_or_404(FichaExercicios, pk=pk)
-    ficha.concluido = not ficha.concluido
-    ficha.save()
-    status = 'marcada como concluída' if ficha.concluido else 'marcada como pendente'
-    messages.success(request, f'Ficha de Exercícios {status}!')
-    return redirect('exercicios-detail', pk=pk)
-
-
-@login_required
-
-def add_followup(request, model_slug, pk):
-    """Create a new FollowUpSession for a given procedure instance."""
-    from django.contrib.contenttypes.models import ContentType
-    from .models import FollowUpSession
-    # map slug to model class
-    slug_map = {
-        'anamnese-geral': AnamneseGeral,
-        'anamnese-acupuntura': AnamneseAcupuntura,
-        'drenagem': FichaDrenagem,
-        'exercicios': FichaExercicios,
-    }
-    model = slug_map.get(model_slug)
-    if not model:
-        messages.error(request, 'Procedimento inválido.')
-        return redirect('index')
-    obj = get_object_or_404(model, pk=pk)
-    if request.method == 'POST':
-        session_date = request.POST.get('session_date')
-        notes = request.POST.get('notes', '')
-        if session_date:
-            # create session
-            FollowUpSession.objects.create(
-                content_type=ContentType.objects.get_for_model(obj),
-                object_id=obj.pk,
-                session_date=session_date,
-                notes=notes
-            )
-            messages.success(request, 'Sessão adicionada com sucesso!')
-        return redirect(request.META.get('HTTP_REFERER', '/'))
-    return redirect(obj.pk)
-
-
-@login_required
-
-def edit_followup(request, session_id):
-    from .models import FollowUpSession
-    session = get_object_or_404(FollowUpSession, pk=session_id)
-    if request.method == 'POST':
-        if 'session_date' in request.POST:
-            session.session_date = request.POST.get('session_date')
-        session.notes = request.POST.get('notes', '')
+    if form.is_valid():
+        session = form.save(commit=False)
+        session.procedure = procedure
         session.save()
-        messages.success(request, 'Sessão atualizada com sucesso!')
-    return redirect(request.META.get('HTTP_REFERER', '/'))
+        messages.success(request, "Sessão adicionada com sucesso!")
+    else:
+        messages.error(request, "Não foi possível adicionar a sessão. Verifique os dados informados.")
+
+    return redirect("procedure-detail", pk=procedure.pk)
+
+
+@login_required
+@require_POST
+def edit_procedure_session(request, session_id):
+    session = get_object_or_404(ProcedureSession, pk=session_id)
+    form = ProcedureSessionForm(request.POST, instance=session)
+
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Sessão atualizada com sucesso!")
+    else:
+        messages.error(request, "Não foi possível atualizar a sessão.")
+
+    return redirect("procedure-detail", pk=session.procedure_id)
+
+
+@login_required
+@require_POST
+def update_procedure_session_status(request, session_id, status):
+    session = get_object_or_404(ProcedureSession, pk=session_id)
+    allowed_statuses = {choice[0] for choice in ProcedureSession.STATUS_CHOICES}
+    if status not in allowed_statuses:
+        messages.error(request, "Status de sessão inválido.")
+        return redirect("procedure-detail", pk=session.procedure_id)
+
+    session.status = status
+    session.save(update_fields=["status", "completed", "updated_at"])
+    messages.success(request, "Status da sessão atualizado com sucesso.")
+    return redirect("procedure-detail", pk=session.procedure_id)
 
 
 @login_required
 def calendar_events(request):
-    """API endpoint to return calendar events as JSON"""
     events = build_calendar_events()
     return JsonResponse(events, safe=False)
 
 
 class CalendarDashboardView(LoginRequiredMixin, TemplateView):
-    """Calendar dashboard view"""
-    template_name = 'dashboard/calendar.html'
+    template_name = "dashboard/calendar.html"

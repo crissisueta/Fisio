@@ -13,7 +13,37 @@
         cursor: pointer;
     }
     .fc-event:hover {
-        opacity: 0.8;
+        opacity: 0.85;
+    }
+    .fc .fc-event.procedure-event {
+        border-width: 0;
+    }
+    .fc .fc-event-main-frame.fc-event-main-frame--with-dot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .event-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: 0 0 8px;
+    }
+    .event-status-dot.complete {
+        background-color: #198754;
+    }
+    .event-status-dot.incomplete {
+        background-color: #ffc107;
+    }
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        vertical-align: middle;
     }
 </style>
 {% endblock %}
@@ -21,8 +51,8 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-12">
-        <h1>Calendário de Atividades</h1>
-        <p class="text-muted">Visão geral de todas as consultas, avaliações e sessões agendadas</p>
+        <h1>Calendário de Sessões</h1>
+        <p class="text-muted">Eventos consolidados a partir das sessões de acompanhamento.</p>
     </div>
 </div>
 
@@ -32,15 +62,12 @@
     </div>
 </div>
 
-<!-- Legend -->
 <div class="row mt-3">
     <div class="col-md-12">
-        <h6>Legenda:</h6>
+        <h6>Legenda de Status:</h6>
         <div class="d-flex flex-wrap gap-3">
-            <span class="badge bg-primary">Anamnese Geral</span>
-            <span class="badge" style="background-color: #6f42c1; color: white;">Acupuntura</span>
-            <span class="badge bg-success">Drenagem Linfática</span>
-            <span class="badge" style="background-color: #fd7e14;">Exercícios</span>
+            <span><span class="legend-dot" style="background-color: #198754;"></span>Concluído</span>
+            <span><span class="legend-dot" style="background-color: #ffc107;"></span>Pendente</span>
         </div>
     </div>
 </div>
@@ -58,16 +85,41 @@ document.addEventListener('DOMContentLoaded', function() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
         },
+        buttonText: {
+            today: 'Hoje',
+            month: 'Mês',
+            week: 'Semana',
+            day: 'Dia'
+        },
+        allDayText: 'Dia inteiro',
+        moreLinkText: 'mais',
         events: '/forms/calendar/events/',
         eventClick: function(info) {
-            // Navigate in the same tab rather than opening a new one
             window.location.href = info.event.url;
+        },
+        eventDidMount: function(info) {
+            const props = info.event.extendedProps;
+            const eventEl = info.el;
+            const frame = eventEl.querySelector('.fc-event-main-frame');
+
+            eventEl.classList.add('procedure-event');
+            eventEl.style.backgroundColor = props.procedure_color;
+            eventEl.style.borderColor = props.procedure_color;
+            eventEl.style.color = '#ffffff';
+
+            if (frame && !frame.querySelector('.event-status-dot')) {
+                frame.classList.add('fc-event-main-frame--with-dot');
+                const dot = document.createElement('span');
+                dot.className = 'event-status-dot ' + (props.is_complete ? 'complete' : 'incomplete');
+                dot.title = props.is_complete ? 'Concluído' : 'Pendente';
+                frame.appendChild(dot);
+            }
         },
         eventDisplay: 'block',
         dayMaxEvents: true,
         moreLinkClick: 'popover',
         locale: 'pt-br',
-        timeZone: 'local',  // let FullCalendar use the browser locale
+        timeZone: 'local',
         height: 'auto'
     });
     calendar.render();

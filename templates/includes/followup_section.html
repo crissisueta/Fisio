@@ -1,71 +1,221 @@
-<hr>
-<h4>Sessões / Acompanhamento</h4>
 <div class="card mb-3">
     <div class="card-body">
-        {% if sessions %}
-            <ul class="list-group">
-                {% for sess in sessions %}
-                    <li class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <strong>{{ sess.session_date|date:"d/m/Y H:i" }}</strong><br>
-                                {% if sess.notes %}
-                                    {{ sess.notes|linebreaks }}
-                                {% else %}
-                                    <em>Sem notas</em>
-                                {% endif %}
-                            </div>
-                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">
-                                Notas
-                            </button>
-                        </div>
-                        <div class="collapse mt-2" id="edit-session-{{ sess.pk }}">
-                            <form method="post" action="{% url 'followup-edit' sess.pk %}">
-                                {% csrf_token %}
-                                <div class="mb-2">
-                                    <label class="form-label">Data da Sessão</label>
-                                    <input type="datetime-local" name="session_date" value="{{ sess.session_date|date:'Y-m-d\TH:i' }}" class="form-control">
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label">Notas da Sessão</label>
-                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
-                                </div>
-                                <button class="btn btn-sm btn-primary">Salvar</button>
-                            </form>
-                        </div>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p>Nenhuma sessão registrada.</p>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <h4 class="mb-1">Sessões de Acompanhamento</h4>
+                <p class="text-muted mb-0">Linha do tempo do tratamento com sessões futuras e histórico.</p>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão de acompanhamento</button>
+        </div>
+
+        {% if next_upcoming_session %}
+        <div class="alert alert-primary d-flex justify-content-between align-items-center flex-wrap gap-2" role="alert">
+            <div>
+                <strong>Próxima sessão:</strong>
+                {{ next_upcoming_session.scheduled_datetime|date:"d/m/Y H:i" }}
+                <span class="badge bg-primary ms-2">{{ next_upcoming_session.get_status_display }}</span>
+            </div>
+            <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" href="#session-notes-{{ next_upcoming_session.pk }}">Abrir notas</a>
+        </div>
         {% endif %}
 
-        <button class="btn btn-sm btn-success mt-3" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão</button>
+        <div class="mb-4">
+            <h5 class="mb-3">Sessões futuras</h5>
+            {% if upcoming_sessions %}
+            <div class="timeline-col">
+                {% for sess in upcoming_sessions %}
+                <div class="card session-card mb-3 {% if next_upcoming_session and next_upcoming_session.pk == sess.pk %}next-session{% endif %}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                            <div>
+                                <h6 class="mb-1">{{ sess.scheduled_datetime|date:"d/m/Y H:i" }}</h6>
+                                {% if sess.status == 'scheduled' %}
+                                <span class="badge text-dark" style="background-color: #ffc107;">Agendada</span>
+                                {% elif sess.status == 'completed' %}
+                                <span class="badge bg-success">Concluída</span>
+                                {% elif sess.status == 'cancelled' %}
+                                <span class="badge bg-secondary">Cancelada</span>
+                                {% else %}
+                                <span class="badge bg-danger">Faltou</span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'completed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-success">Concluir</button></form>
+                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'cancelled' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Cancelar</button></form>
+                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'missed' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Faltou</button></form>
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">Editar</button>
+                            </div>
+                        </div>
+
+                        <p class="text-muted mb-2">
+                            {% if sess.notes %}
+                            {{ sess.notes|striptags|truncatechars:120 }}
+                            {% else %}
+                            Sem notas registradas.
+                            {% endif %}
+                        </p>
+
+                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#session-notes-{{ sess.pk }}">Abrir notas completas</a>
+                        <div class="collapse mt-2" id="session-notes-{{ sess.pk }}">
+                            <div class="border rounded p-2 bg-light">
+                                {% if sess.notes %}
+                                {{ sess.notes|linebreaks }}
+                                {% else %}
+                                <em>Sem notas.</em>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="collapse mt-3" id="edit-session-{{ sess.pk }}">
+                            <form method="post" action="{% url 'procedure-session-edit' sess.pk %}">
+                                {% csrf_token %}
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label">Data e Hora</label>
+                                        <input type="datetime-local" name="scheduled_datetime" value="{{ sess.scheduled_datetime|date:'Y-m-d\\TH:i' }}" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label">Status</label>
+                                        <select name="status" class="form-select">
+                                            <option value="scheduled" {% if sess.status == 'scheduled' %}selected{% endif %}>Agendada</option>
+                                            <option value="completed" {% if sess.status == 'completed' %}selected{% endif %}>Concluída</option>
+                                            <option value="cancelled" {% if sess.status == 'cancelled' %}selected{% endif %}>Cancelada</option>
+                                            <option value="missed" {% if sess.status == 'missed' %}selected{% endif %}>Faltou</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Notas</label>
+                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
+                                </div>
+                                <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">Nenhuma sessão futura agendada.</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <h5 class="mb-3">Sessões passadas</h5>
+            {% if past_sessions %}
+            <div class="timeline-col">
+                {% for sess in past_sessions %}
+                <div class="card session-card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                            <div>
+                                <h6 class="mb-1">{{ sess.scheduled_datetime|date:"d/m/Y H:i" }}</h6>
+                                {% if sess.status == 'scheduled' %}
+                                <span class="badge text-dark" style="background-color: #ffc107;">Agendada</span>
+                                {% elif sess.status == 'completed' %}
+                                <span class="badge bg-success">Concluída</span>
+                                {% elif sess.status == 'cancelled' %}
+                                <span class="badge bg-secondary">Cancelada</span>
+                                {% else %}
+                                <span class="badge bg-danger">Faltou</span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <form method="post" action="{% url 'procedure-session-status' sess.pk 'scheduled' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-warning">Reabrir</button></form>
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#edit-session-{{ sess.pk }}">Editar</button>
+                            </div>
+                        </div>
+
+                        <p class="text-muted mb-2">
+                            {% if sess.notes %}
+                            {{ sess.notes|striptags|truncatechars:120 }}
+                            {% else %}
+                            Sem notas registradas.
+                            {% endif %}
+                        </p>
+
+                        <a class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" href="#session-notes-{{ sess.pk }}">Abrir notas completas</a>
+                        <div class="collapse mt-2" id="session-notes-{{ sess.pk }}">
+                            <div class="border rounded p-2 bg-light">
+                                {% if sess.notes %}
+                                {{ sess.notes|linebreaks }}
+                                {% else %}
+                                <em>Sem notas.</em>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="collapse mt-3" id="edit-session-{{ sess.pk }}">
+                            <form method="post" action="{% url 'procedure-session-edit' sess.pk %}">
+                                {% csrf_token %}
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label">Data e Hora</label>
+                                        <input type="datetime-local" name="scheduled_datetime" value="{{ sess.scheduled_datetime|date:'Y-m-d\\TH:i' }}" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label">Status</label>
+                                        <select name="status" class="form-select">
+                                            <option value="scheduled" {% if sess.status == 'scheduled' %}selected{% endif %}>Agendada</option>
+                                            <option value="completed" {% if sess.status == 'completed' %}selected{% endif %}>Concluída</option>
+                                            <option value="cancelled" {% if sess.status == 'cancelled' %}selected{% endif %}>Cancelada</option>
+                                            <option value="missed" {% if sess.status == 'missed' %}selected{% endif %}>Faltou</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Notas</label>
+                                    <textarea name="notes" class="form-control" rows="3">{{ sess.notes }}</textarea>
+                                </div>
+                                <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">Nenhuma sessão passada encontrada.</p>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<!-- new session modal -->
-<div class="modal fade" id="newSessionModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="post" action="{% url 'followup-new' model_slug ficha.pk %}">
-         {% csrf_token %}
-         <div class="modal-header"><h5 class="modal-title">Nova sessão</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-         <div class="modal-body">
-            <div class="mb-2">
-              <label class="form-label">Data da Sessão</label>
-              <input type="datetime-local" name="session_date" class="form-control">
-            </div>
-            <div class="mb-2">
-              <label class="form-label">Notas da Sessão</label>
-              <textarea name="notes" class="form-control" rows="3"></textarea>
-            </div>
-         </div>
-         <div class="modal-footer">
-            <button type="submit" class="btn btn-primary">Salvar</button>
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-         </div>
-      </form>
+<div class="modal fade" id="newSessionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'procedure-session-add' procedure.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nova sessão de acompanhamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Data e Hora</label>
+                            <input type="datetime-local" name="scheduled_datetime" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                <option value="scheduled">Agendada</option>
+                                <option value="completed">Concluída</option>
+                                <option value="cancelled">Cancelada</option>
+                                <option value="missed">Faltou</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notes" class="form-control" rows="4" placeholder="Resumo da sessão"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Salvar sessão</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
     </div>
-  </div>
 </div>

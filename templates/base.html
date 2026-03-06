@@ -67,11 +67,12 @@
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}">Login</a>
+                            <a class="nav-link" href="{% url 'login' %}">Entrar</a>
                         </li>
                     {% endif %}
                 </ul>
             </div>
+        </div>
     </nav>
 
     <div class="container-fluid">
@@ -79,24 +80,15 @@
             {% if user.is_authenticated %}
             <div class="col-md-3 sidebar collapse show" id="sidebar">
                 <h5 class="px-3 py-3 border-bottom">Menu</h5>
-                <a href="/" class="{% if request.resolver_match.url_name == 'index' %}active{% endif %}">Dashboard</a>
+                <a href="/" class="{% if request.resolver_match.url_name == 'index' %}active{% endif %}">Painel</a>
                 <a href="{% url 'calendar-dashboard' %}" class="{% if 'calendar' in request.resolver_match.url_name %}active{% endif %}">Calendário</a>
-                
-                <h6 class="px-3 pt-3 pb-2 text-muted">Fichas de Avaliação</h6>
+
+                <h6 class="px-3 pt-3 pb-2 text-muted">Gestão Clínica</h6>
                 <a href="{% url 'inscricao-list' %}" class="{% if 'inscricao' in request.resolver_match.url_name %}active{% endif %}">
-                    Inscrição
+                    Pacientes
                 </a>
-                <a href="{% url 'anamnese-geral-list' %}" class="{% if 'anamnese-geral' in request.resolver_match.url_name %}active{% endif %}">
-                    Anamnese Geral
-                </a>
-                <a href="{% url 'anamnese-acupuntura-list' %}" class="{% if 'anamnese-acupuntura' in request.resolver_match.url_name %}active{% endif %}">
-                    Acupuntura
-                </a>
-                <a href="{% url 'drenagem-list' %}" class="{% if 'drenagem' in request.resolver_match.url_name %}active{% endif %}">
-                    Drenagem Linfática
-                </a>
-                <a href="{% url 'exercicios-list' %}" class="{% if 'exercicios' in request.resolver_match.url_name %}active{% endif %}">
-                    Exercícios
+                <a href="{% url 'procedure-list' %}" class="{% if 'procedure' in request.resolver_match.url_name %}active{% endif %}">
+                    Procedimentos
                 </a>
             </div>
             {% endif %}
@@ -115,18 +107,15 @@
             </div>
         </div>
     </div>
-    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Initialize Bootstrap tooltips
         document.addEventListener('DOMContentLoaded', function() {
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.map(function(tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl);
             });
 
-            // Handle sidebar collapse/expand to adjust main content width
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.querySelector('.main-content');
             if (sidebar && mainContent) {

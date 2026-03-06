@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Deletar Procedimento{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h1 class="h3 mb-3">Deletar Procedimento</h1>
+                <p class="mb-4">
+                    Confirma remover o procedimento <strong>{{ object.procedure_type.name }}</strong>
+                    do paciente <strong>{{ object.patient.nome }}</strong>?
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, deletar</button>
+                    <a href="{% url 'procedure-detail' object.pk %}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

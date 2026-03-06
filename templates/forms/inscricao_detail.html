@@ -10,7 +10,7 @@
     <div class="col-md-2 text-end">
         <div class="btn-group" role="group">
             <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-warning">Editar</a>
-            <a href="{% url 'inscricao-list' %}" class="btn btn-secondary">🔙 Voltar</a>
+            <a href="{% url 'inscricao-list' %}" class="btn btn-secondary">Voltar</a>
         </div>
     </div>
 </div>
@@ -54,157 +54,57 @@
                 <p><strong>Plano:</strong> {{ ficha.plano }}</p>
             </div>
             <div class="col-md-6">
-                <p><strong>Criado em:</strong> {{ ficha.criado_em|date:"d/m/Y H:i" }}</p>
-                <p><strong>Atualizado em:</strong> {{ ficha.atualizado_em|date:"d/m/Y H:i" }}</p>
+                <p><strong>Criado em:</strong> {{ ficha.created_at|date:"d/m/Y H:i" }}</p>
+                <p><strong>Atualizado em:</strong> {{ ficha.updated_at|date:"d/m/Y H:i" }}</p>
             </div>
         </div>
 
         {% if ficha.observacoes %}
-            <hr>
-            <h5 class="card-title">Observações</h5>
-            <p>{{ ficha.observacoes }}</p>
+        <hr>
+        <h5 class="card-title">Observações</h5>
+        <p>{{ ficha.observacoes }}</p>
         {% endif %}
     </div>
 </div>
 
 <div class="card mt-4">
     <div class="card-body">
-        <h5 class="card-title">Consultas e Avaliações</h5>
-        
-        <!-- Anamnese Geral -->
-        {% if anamneses_geral %}
-        <div class="mb-4">
-            <h6>Anamnese Geral</h6>
-            <table class="table table-sm">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title mb-0">Procedimentos</h5>
+            <a href="{% url 'procedure-create' %}" class="btn btn-sm btn-success">+ Novo procedimento</a>
+        </div>
+
+        {% if procedures %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
                 <thead>
                     <tr>
-                        <th>Data</th>
+                        <th>Tipo</th>
                         <th>Status</th>
+                        <th>Sessões</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for anamnese in anamneses_geral %}
+                    {% for procedure in procedures %}
                     <tr>
-                        <td>{{ anamnese.data|date:"d/m/Y" }}</td>
+                        <td>{{ procedure.procedure_type.name }}</td>
                         <td>
-                            {% if anamnese.concluido %}
-                                <span class="badge bg-success">Concluída</span>
+                            {% if procedure.is_complete %}
+                            <span class="badge bg-success">Concluído</span>
                             {% else %}
-                                <span class="badge bg-warning">Pendente</span>
+                            <span class="badge text-dark" style="background-color: #ffc107;">Pendente</span>
                             {% endif %}
                         </td>
-                        <td>
-                            <a href="{% url 'anamnese-geral-detail' anamnese.pk %}" class="btn btn-sm btn-info">Ver</a>
-                        </td>
+                        <td>{{ procedure.sessions.count }}</td>
+                        <td><a href="{% url 'procedure-detail' procedure.pk %}" class="btn btn-sm btn-info">Ver</a></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% endif %}
-        
-        <!-- Anamnese Acupuntura -->
-        {% if anamneses_acupuntura %}
-        <div class="mb-4">
-            <h6>Acupuntura</h6>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Data da Consulta</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for anamnese in anamneses_acupuntura %}
-                    <tr>
-                        <td>{{ anamnese.data_consulta|date:"d/m/Y" }}</td>
-                        <td>
-                            {% if anamnese.concluido %}
-                                <span class="badge bg-success">Concluída</span>
-                            {% else %}
-                                <span class="badge bg-warning">Pendente</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'anamnese-acupuntura-detail' anamnese.pk %}" class="btn btn-sm btn-info">Ver</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-        
-        <!-- Ficha Drenagem -->
-        {% if fichas_drenagem %}
-        <div class="mb-4">
-            <h6>Drenagem Linfática</h6>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ficha in fichas_drenagem %}
-                    <tr>
-                        <td>{{ ficha.data|date:"d/m/Y" }}</td>
-                        <td>
-                            {% if ficha.concluido %}
-                                <span class="badge bg-success">Concluída</span>
-                            {% else %}
-                                <span class="badge bg-warning">Pendente</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'drenagem-detail' ficha.pk %}" class="btn btn-sm btn-info">Ver</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-        
-        <!-- Ficha Exercicios -->
-        {% if fichas_exercicios %}
-        <div class="mb-4">
-            <h6>Exercícios</h6>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ficha in fichas_exercicios %}
-                    <tr>
-                        <td>{{ ficha.dia|date:"d/m/Y" }}</td>
-                        <td>
-                            {% if ficha.concluido %}
-                                <span class="badge bg-success">Concluída</span>
-                            {% else %}
-                                <span class="badge bg-warning">Pendente</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'exercicios-detail' ficha.pk %}" class="btn btn-sm btn-info">Ver</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-        
-        {% if not anamneses_geral and not anamneses_acupuntura and not fichas_drenagem and not fichas_exercicios %}
-        <p class="text-muted">Nenhuma consulta ou avaliação registrada para este paciente.</p>
+        {% else %}
+        <p class="text-muted">Nenhum procedimento registrado para este paciente.</p>
         {% endif %}
     </div>
 </div>

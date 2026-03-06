@@ -1,165 +1,123 @@
-# Sistema de Gestão de Fichas de Fisioterapia
+# Sistema de Gestão de Procedimentos de Fisioterapia
 
-Uma aplicação Django para gerenciar formulários e fichas de avaliação em clínicas de fisioterapia.
+Aplicação Django para gestão de pacientes, procedimentos e sessões de acompanhamento em clínicas de fisioterapia.
+
+## Arquitetura Atual
+
+O sistema usa um modelo unificado:
+
+- `FichaInscricao` (paciente)
+- `ProcedureType` (tipo de procedimento)
+- `Procedure` (plano/tratamento do paciente)
+- `ProcedureSession` (sessões agendadas do procedimento)
+
+Toda a agenda do calendário é baseada em `ProcedureSession`.
 
 ## Funcionalidades
 
-- **Ficha de Inscrição**: Registro de novos pacientes
-- **Anamnese Geral**: Histórico geral de saúde
-- **Anamnese Acupuntura**: Avaliação específica para acupuntura
-- **Drenagem Linfática**: Avaliação de drenagem linfática
-- **Ficha de Exercícios**: Planejamento de exercícios personalizados
+- Cadastro e gestão de pacientes (`inscricao`)
+- CRUD de procedimentos
+- Múltiplas sessões por procedimento
+- Marcação de status concluído/pendente em procedimento e sessão
+- Calendário consolidado de sessões
+- Django Admin para gestão completa
 
 ## Requisitos
 
 - Python 3.8+
-- pip (gerenciador de pacotes Python)
+- pip
 
 ## Instalação
 
-### 1. Clone ou extraia o projeto
+1. Entre na pasta do projeto:
 
 ```bash
 cd /caminho/para/Fisio
 ```
 
-### 2. Crie um ambiente virtual
+2. Crie um ambiente virtual:
 
 ```bash
-python -m venv venv
+python -m venv .venv
 ```
 
-### 3. Ative o ambiente virtual
+3. Ative o ambiente virtual:
 
-**No Linux/Mac:**
+Linux/Mac:
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
-**No Windows:**
+Windows:
 ```bash
-venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
-### 4. Instale as dependências
+4. Instale dependências:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Configure variáveis de ambiente
+5. Configure variáveis de ambiente (opcional para dev local):
 
-O projeto utiliza variáveis de ambiente em vez de configurações hard‑coded. Para facilitar o desenvolvimento existe um arquivo
-`env/Fisio.env` que já contém os valores usados em produção. Antes de executar
-comandos Django carregue essas variáveis:
+- O projeto lê automaticamente `env/Fisio.env` se o arquivo existir.
 
-```bash
-# opção automática (recomendado a partir de agora, o arquivo já é lido pelo manage.py/wsgi.py):
-# basta garantir que `env/Fisio.env` existe e contém os valores desejados
-
-# ou manualmente:
-set -a && source env/Fisio.env && set +a
-```
-
-Em sistemas Windows use `set`/`setx` ou adapte os comandos conforme necessário.
-
-### 5. Execute as migrações do banco de dados
+6. Execute migrações:
 
 ```bash
 python manage.py migrate
 ```
 
-### 6. Crie um usuário admin (superuser)
+7. Crie um superusuário:
 
 ```bash
 python manage.py createsuperuser
 ```
 
-Você será solicitado a informar:
-- Nome de usuário
-- Email
-- Senha
-- Confirmar senha
-
-## Rodando a Aplicação
-
-### 1. Inicie o servidor de desenvolvimento
+## Executar Aplicação
 
 ```bash
 python manage.py runserver
 ```
 
-### 2. Acesse a aplicação
+Acessos:
 
-Abra seu navegador e vá para:
-- **Dashboard**: http://localhost:8000
-- **Admin**: http://localhost:8000/admin
+- Dashboard: `http://localhost:8000/`
+- Módulo de pacientes/procedimentos: `http://localhost:8000/forms/`
+- Admin: `http://localhost:8000/admin`
 
-## Estrutura do Projeto
+## Estrutura Resumida
 
-```
+```text
 Fisio/
-├── manage.py                           # Arquivo de gerenciamento Django
-├── requirements.txt                    # Dependências do projeto
-├── db.sqlite3                         # Banco de dados (criado automaticamente)
-├── fisio_project/                     # Configuração do projeto
-│   ├── settings.py                    # Configurações do Django
-│   ├── urls.py                        # URLs principais
-│   └── wsgi.py                        # Arquivo WSGI
-├── forms/                             # App principal
-│   ├── models.py                      # Modelos de banco de dados
-│   ├── forms.py                       # Formulários Django
-│   ├── views.py                       # Views
-│   ├── urls.py                        # URLs do app
-│   └── admin.py                       # Configuração do admin
-└── templates/                         # Templates HTML
-    ├── base.html                      # Template base
-    ├── index.html                     # Dashboard
-    └── forms/                         # Templates dos formulários
+├── fisio_project/               # Configuração Django
+├── forms/                       # App principal
+│   ├── models.py                # FichaInscricao, ProcedureType, Procedure, ProcedureSession
+│   ├── views.py                 # Views de paciente/procedimento/sessão/calendário
+│   ├── forms.py                 # ModelForms
+│   ├── urls.py                  # Rotas do app
+│   ├── admin.py                 # Configuração admin
+│   └── migrations/              # Histórico de migrações (inclui migração de dados legados)
+└── templates/
+    ├── index.html
+    ├── dashboard/calendar.html
+    ├── includes/followup_section.html
+    └── forms/
+        ├── inscricao_*.html
+        └── procedure_*.html
 ```
 
-## Modelos de Dados
+## Observação sobre Migração de Dados
 
-### FichaInscricao
-Informações básicas de inscrição do paciente
+As migrações recentes já incluem:
 
-### AnamneseGeral
-Histórico geral de saúde e condições médicas
+- criação do modelo unificado
+- migração de dados legados para `Procedure`/`ProcedureSession`
+- remoção dos modelos legados
 
-### AnamneseAcupuntura
-Avaliação específica para tratamento de acupuntura
-
-### FichaDrenagem
-Avaliação para tratamento de drenagem linfática
-
-### FichaExercicios
-Planejamento e acompanhamento de exercícios
-
-## Acessando o Admin Panel
-
-1. Vá para http://localhost:8000/admin
-2. Faça login com as credenciais de superuser criadas
-3. Gerenciadores todas as fichas diretamente na interface de administração
-
-## Recursos Adicionais
-
-- **Bootstrap 5**: Interface responsiva e moderna
-- **SQLite**: Banco de dados leve (padrão)
-- **Django Admin**: Interface administrativa completa
-- **CRUD Completo**: Create, Read, Update, Delete para cada tipo de ficha
-
-## Dicas de Uso
-
-- Use o dashboard para uma visão geral rápida de todas as fichas
-- Os formulários validam automaticamente os dados antes de salvar
-- Todas as fichas possuem histórico de criação e atualização
-- Você pode pesquisar e filtrar fichas no painel admin
+Se você estiver em ambiente novo, apenas rode `migrate`.
 
 ## Suporte
 
-Para problemas ou dúvidas, consulte a documentação oficial do Django em https://www.djangoproject.com/
-
----
-
-**Versão**: 1.0
-**Data**: Fevereiro de 2026
+- Django Docs: https://docs.djangoproject.com/
