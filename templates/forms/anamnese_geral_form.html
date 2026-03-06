@@ -6,8 +6,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const pacienteSelect = document.getElementById('id_paciente');
+    const isEditingForm = {{ form.instance.pk|safe|yesno:"true,false" }};
     
-    if (pacienteSelect) {
+    if (pacienteSelect && !isEditingForm) {
         pacienteSelect.addEventListener('change', function() {
             if (this.value) {
                 fetch(`/forms/api/paciente/${this.value}/`)
@@ -17,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('id_profissao').value = data.profissao || '';
                         document.getElementById('id_data_nascimento').value = data.data_nascimento || '';
                         
-                        // Preencher data com today se não existir
+                        // Set evaluation date to today if not set
                         const dataInput = document.getElementById('id_data');
                         if (!dataInput.value) {
                             const today = new Date().toISOString().split('T')[0];
