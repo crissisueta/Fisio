@@ -5,7 +5,10 @@
                 <h4 class="mb-1">Sessões de Acompanhamento</h4>
                 <p class="text-muted mb-0">Linha do tempo do tratamento com sessões futuras e histórico.</p>
             </div>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão de acompanhamento</button>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{% url 'procedure-bulk-schedule' procedimento.pk %}" class="btn btn-outline-primary">Preencher período</a>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newSessionModal">+ Adicionar sessão de acompanhamento</button>
+            </div>
         </div>
 
         {% if proxima_sessao %}
@@ -28,6 +31,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                             <div>
+                                <span class="badge bg-light text-dark border mb-2">Sessão {{ sessao.numero|default:"-" }}</span>
                                 <h6 class="mb-1">{{ sessao.data_hora|date:"d/m/Y H:i" }}</h6>
                                 <span class="badge {% if sessao.status == 'agendada' %}text-dark" style="background-color:#ffc107;{% elif sessao.status == 'realizada' %}bg-success{% elif sessao.status == 'cancelada' %}bg-secondary{% else %}bg-danger{% endif %}">
                                     {{ sessao.get_status_display }}
@@ -54,8 +58,7 @@
                             <form method="post" action="{% url 'procedure-session-edit' sessao.pk %}">
                                 {% csrf_token %}
                                 <div class="row">
-                                    <div class="col-md-4 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
-                                    <div class="col-md-3 mb-2"><label class="form-label">Número</label><input type="number" min="1" name="numero" value="{{ sessao.numero|default:'' }}" class="form-control"></div>
+                                    <div class="col-md-5 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
                                     <div class="col-md-3 mb-2">
                                         <label class="form-label">Status</label>
                                         <select name="status" class="form-select">
@@ -94,6 +97,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                             <div>
+                                <span class="badge bg-light text-dark border mb-2">Sessão {{ sessao.numero|default:"-" }}</span>
                                 <h6 class="mb-1">{{ sessao.data_hora|date:"d/m/Y H:i" }}</h6>
                                 <span class="badge {% if sessao.status == 'agendada' %}text-dark" style="background-color:#ffc107;{% elif sessao.status == 'realizada' %}bg-success{% elif sessao.status == 'cancelada' %}bg-secondary{% else %}bg-danger{% endif %}">{{ sessao.get_status_display }}</span>
                             </div>
@@ -110,8 +114,7 @@
                             <form method="post" action="{% url 'procedure-session-edit' sessao.pk %}">
                                 {% csrf_token %}
                                 <div class="row">
-                                    <div class="col-md-4 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
-                                    <div class="col-md-3 mb-2"><label class="form-label">Número</label><input type="number" min="1" name="numero" value="{{ sessao.numero|default:'' }}" class="form-control"></div>
+                                    <div class="col-md-5 mb-2"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" value="{{ sessao.data_hora|date:'Y-m-d\\TH:i' }}" class="form-control" required></div>
                                     <div class="col-md-3 mb-2">
                                         <label class="form-label">Status</label>
                                         <select name="status" class="form-select">
@@ -154,8 +157,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-4 mb-3"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" class="form-control" required></div>
-                        <div class="col-md-3 mb-3"><label class="form-label">Número</label><input type="number" min="1" name="numero" class="form-control"></div>
+                        <div class="col-md-5 mb-3"><label class="form-label">Data e Hora</label><input type="datetime-local" name="data_hora" class="form-control" required></div>
                         <div class="col-md-3 mb-3"><label class="form-label">Status</label>
                             <select name="status" class="form-select">
                                 <option value="agendada">Agendada</option>

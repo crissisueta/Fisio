@@ -1,6 +1,14 @@
 {% extends 'base.html' %}
 
 {% block title %}{% if form.instance.pk %}Editar{% else %}Novo{% endif %} Procedimento{% endblock %}
+{% block extra_css %}
+<style>
+    .schedule-mode-card { border: 1px solid #dee2e6; border-radius: 12px; padding: 16px; background: #f8f9fa; }
+    .schedule-mode-card .form-check { padding: 12px 14px 12px 2rem; border: 1px solid #dee2e6; border-radius: 10px; background: #fff; }
+    .schedule-mode-card .form-check + .form-check { margin-top: 10px; }
+    .schedule-mode-card .hint { color: #6c757d; font-size: 0.92rem; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row mb-4"><div class="col-md-12"><h1>{% if form.instance.pk %}Editar{% else %}Novo{% endif %} Procedimento</h1></div></div>
@@ -28,6 +36,41 @@
                 {% if form.observacoes.errors %}<div class="invalid-feedback d-block">{{ form.observacoes.errors }}</div>{% endif %}
             </div>
 
+            {% if form.modo_agendamento %}
+            <div class="schedule-mode-card mb-3">
+                <h5 class="mb-3">Agendamento inicial</h5>
+                <div class="mb-3">
+                    {% for radio in form.modo_agendamento %}
+                    <div class="form-check">
+                        {{ radio.tag }}
+                        <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                    </div>
+                    {% endfor %}
+                    {% if form.modo_agendamento.errors %}<div class="invalid-feedback d-block">{{ form.modo_agendamento.errors }}</div>{% endif %}
+                </div>
+
+                <div id="single-schedule-fields">
+                    <p class="hint mb-3">Ao salvar, o procedimento já será criado com a primeira sessão de acompanhamento.</p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.data_sessao_inicial.id_for_label }}" class="form-label">{{ form.data_sessao_inicial.label }}</label>
+                            {{ form.data_sessao_inicial }}
+                            {% if form.data_sessao_inicial.errors %}<div class="invalid-feedback d-block">{{ form.data_sessao_inicial.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.hora_sessao_inicial.id_for_label }}" class="form-label">{{ form.hora_sessao_inicial.label }}</label>
+                            {{ form.hora_sessao_inicial }}
+                            {% if form.hora_sessao_inicial.errors %}<div class="invalid-feedback d-block">{{ form.hora_sessao_inicial.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bulk-schedule-hint" class="alert alert-info mb-0 d-none">
+                    Depois de salvar este procedimento, você irá para uma etapa de preenchimento de período para criar todas as sessões do mês escolhido.
+                </div>
+            </div>
+            {% endif %}
+
             <div class="form-check mb-3">
                 {{ form.concluido }}
                 <label class="form-check-label" for="{{ form.concluido.id_for_label }}">{{ form.concluido.label }}</label>
@@ -41,4 +84,26 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if form.modo_agendamento %}
+<script>
+    (function() {
+        const radios = document.querySelectorAll('input[name="modo_agendamento"]');
+        const singleFields = document.getElementById('single-schedule-fields');
+        const bulkHint = document.getElementById('bulk-schedule-hint');
+
+        function syncMode() {
+            const selected = document.querySelector('input[name="modo_agendamento"]:checked');
+            const isBulk = selected && selected.value === 'lote';
+            singleFields.classList.toggle('d-none', isBulk);
+            bulkHint.classList.toggle('d-none', !isBulk);
+        }
+
+        radios.forEach((radio) => radio.addEventListener('change', syncMode));
+        syncMode();
+    })();
+</script>
+{% endif %}
 {% endblock %}

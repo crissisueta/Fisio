@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Agendamento em Lote{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1 class="mb-1">Preencher período</h1>
+        <p class="text-muted mb-0">Crie sessões recorrentes para o procedimento já cadastrado.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'procedure-detail' procedimento.pk %}" class="btn btn-secondary">Voltar ao procedimento</a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <span class="text-muted d-block small">Paciente</span>
+                    <strong>{{ procedimento.paciente.nome }}</strong>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <span class="text-muted d-block small">Procedimento</span>
+                    <strong>{{ procedimento.tipo_procedimento.nome }}</strong>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <span class="text-muted d-block small">Sessões atuais</span>
+                    <strong>{{ procedimento.sessoes.count }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="alert alert-info">
+                Selecione os dias da semana e o horário inicial. O sistema criará uma sessão para cada ocorrência no mês escolhido.
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.referencia_mes.id_for_label }}" class="form-label">{{ form.referencia_mes.label }}</label>
+                    {{ form.referencia_mes }}
+                    {% if form.referencia_mes.errors %}<div class="invalid-feedback d-block">{{ form.referencia_mes.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.hora_inicial.id_for_label }}" class="form-label">{{ form.hora_inicial.label }}</label>
+                    {{ form.hora_inicial }}
+                    {% if form.hora_inicial.errors %}<div class="invalid-feedback d-block">{{ form.hora_inicial.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="{{ form.hora_final.id_for_label }}" class="form-label">{{ form.hora_final.label }}</label>
+                    {{ form.hora_final }}
+                    {% if form.hora_final.help_text %}<div class="form-text">{{ form.hora_final.help_text }}</div>{% endif %}
+                    {% if form.hora_final.errors %}<div class="invalid-feedback d-block">{{ form.hora_final.errors }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label d-block">{{ form.dias_semana.label }}</label>
+                <div class="row">
+                    {% for checkbox in form.dias_semana %}
+                    <div class="col-md-4 mb-2">
+                        <div class="form-check border rounded p-3 h-100">
+                            {{ checkbox.tag }}
+                            <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if form.dias_semana.errors %}<div class="invalid-feedback d-block">{{ form.dias_semana.errors }}</div>{% endif %}
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+                <button type="submit" class="btn btn-primary">Criar agendamentos do mês</button>
+                <a href="{% url 'procedure-detail' procedimento.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

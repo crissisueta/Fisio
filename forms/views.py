@@ -1,16 +1,24 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
-from .forms import AvaliacaoForm, PacienteForm, ProcedimentoForm, SessaoForm
+from .forms import AvaliacaoForm, PacienteForm, ProcedimentoBulkScheduleForm, ProcedimentoForm, SessaoForm
 from .models import Avaliacao, Paciente, Procedimento, Sessao
 from .services.calendar_service import build_calendar_events
+from .services.scheduling_service import (
+    create_initial_session_for_procedure,
+    create_session_for_procedimento,
+    generate_sessions_for_month_by_weekday,
+    update_sessao,
+)
 
 
 def _data_hora_ciente_fuso(value):
@@ -203,9 +211,32 @@ class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
     template_name = "forms/procedure_form.html"
     success_url = reverse_lazy("procedure-list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["enable_schedule_fields"] = True
+        return kwargs
+
     def form_valid(self, form):
-        messages.success(self.request, "Procedimento criado com sucesso.")
-        return super().form_valid(form)
+        try:
+            with transaction.atomic():
+                self.object = form.save()
+                modo_agendamento = form.cleaned_data["modo_agendamento"]
+
+                if modo_agendamento == ProcedimentoForm.MODO_AGENDAMENTO_UNICO:
+                    create_initial_session_for_procedure(
+                        self.object,
+                        data_hora=form.get_initial_session_datetime(),
+                    )
+        except ValidationError as exc:
+            form.add_error("data_sessao_inicial", exc.message)
+            return self.form_invalid(form)
+
+        if form.cleaned_data["modo_agendamento"] == ProcedimentoForm.MODO_AGENDAMENTO_UNICO:
+            messages.success(self.request, "Procedimento criado com sucesso com a primeira sessão agendada.")
+            return redirect("procedure-detail", pk=self.object.pk)
+
+        messages.success(self.request, "Procedimento criado com sucesso. Agora preencha o período das sessões.")
+        return redirect("procedure-bulk-schedule", pk=self.object.pk)
 
 
 class ProcedimentoUpdateView(LoginRequiredMixin, UpdateView):
@@ -213,6 +244,11 @@ class ProcedimentoUpdateView(LoginRequiredMixin, UpdateView):
     form_class = ProcedimentoForm
     template_name = "forms/procedure_form.html"
     success_url = reverse_lazy("procedure-list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["enable_schedule_fields"] = False
+        return kwargs
 
     def form_valid(self, form):
         messages.success(self.request, "Procedimento atualizado com sucesso.")
@@ -227,6 +263,58 @@ class ProcedimentoDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, "Procedimento removido com sucesso.")
         return super().delete(request, *args, **kwargs)
+
+
+class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
+    template_name = "forms/procedure_bulk_schedule.html"
+    form_class = ProcedimentoBulkScheduleForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.procedimento = get_object_or_404(
+            Procedimento.objects.select_related("paciente", "tipo_procedimento"),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        now = timezone.localdate()
+        initial["referencia_mes"] = now.replace(day=1)
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["procedimento"] = self.procedimento
+        return context
+
+    def form_valid(self, form):
+        referencia_mes = form.cleaned_data["referencia_mes"]
+        result = generate_sessions_for_month_by_weekday(
+            self.procedimento,
+            year=referencia_mes.year,
+            month=referencia_mes.month,
+            weekdays=form.cleaned_data["dias_semana"],
+            start_time=form.cleaned_data["hora_inicial"],
+        )
+
+        if not result.created_sessions:
+            messages.warning(
+                self.request,
+                "Nenhuma sessão foi criada. Todos os horários selecionados já possuíam conflito.",
+            )
+        else:
+            messages.success(
+                self.request,
+                f"{len(result.created_sessions)} sessão(ões) criada(s) com sucesso para este procedimento.",
+            )
+
+        if result.skipped_conflicts:
+            messages.warning(
+                self.request,
+                f"{len(result.skipped_conflicts)} data(s) foram ignoradas por conflito de agenda.",
+            )
+
+        return redirect("procedure-detail", pk=self.procedimento.pk)
 
 
 @login_required
@@ -246,10 +334,17 @@ def add_sessao(request, pk):
     procedimento = get_object_or_404(Procedimento, pk=pk)
     form = SessaoForm(request.POST)
     if form.is_valid():
-        sessao = form.save(commit=False)
-        sessao.procedimento = procedimento
-        sessao.save()
-        messages.success(request, "Sessão adicionada com sucesso.")
+        try:
+            create_session_for_procedimento(
+                procedimento,
+                data_hora=form.cleaned_data["data_hora"],
+                status=form.cleaned_data["status"],
+                assinatura_confirmada=form.cleaned_data["assinatura_confirmada"],
+                observacoes=form.cleaned_data["observacoes"],
+            )
+            messages.success(request, "Sessão adicionada com sucesso.")
+        except ValidationError as exc:
+            messages.error(request, exc.message)
     else:
         messages.error(request, "Não foi possível adicionar a sessão. Verifique os dados informados.")
     return redirect("procedure-detail", pk=procedimento.pk)
@@ -261,8 +356,17 @@ def edit_sessao(request, session_id):
     sessao = get_object_or_404(Sessao, pk=session_id)
     form = SessaoForm(request.POST, instance=sessao)
     if form.is_valid():
-        form.save()
-        messages.success(request, "Sessão atualizada com sucesso.")
+        try:
+            update_sessao(
+                sessao,
+                data_hora=form.cleaned_data["data_hora"],
+                status=form.cleaned_data["status"],
+                assinatura_confirmada=form.cleaned_data["assinatura_confirmada"],
+                observacoes=form.cleaned_data["observacoes"],
+            )
+            messages.success(request, "Sessão atualizada com sucesso.")
+        except ValidationError as exc:
+            messages.error(request, exc.message)
     else:
         messages.error(request, "Não foi possível atualizar a sessão.")
     return redirect("procedure-detail", pk=sessao.procedimento_id)
