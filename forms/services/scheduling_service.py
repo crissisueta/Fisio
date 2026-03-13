@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -29,10 +29,21 @@ class BulkSessionGenerationResult:
     skipped_conflicts: list[datetime]
 
 
+@dataclass
+class ScheduleConflict:
+    conflicting_session: Sessao
+    start: datetime
+    end: datetime
+
+
 def ensure_aware_datetime(value: datetime) -> datetime:
     if timezone.is_naive(value):
         return timezone.make_aware(value, timezone.get_current_timezone())
     return value
+
+
+def get_session_end_datetime(start: datetime, duration_minutes: int) -> datetime:
+    return ensure_aware_datetime(start) + timedelta(minutes=duration_minutes)
 
 
 def resequence_sessoes(procedimento: Procedimento | int) -> None:
@@ -47,29 +58,61 @@ def resequence_sessoes(procedimento: Procedimento | int) -> None:
             Sessao.objects.filter(pk=sessao.pk).update(numero=index, updated_at=timezone.now())
 
 
-def _validate_session_collision(
-    procedimento: Procedimento,
-    data_hora: datetime,
+def find_schedule_conflict(
     *,
+    start: datetime,
+    duration_minutes: int,
     ignore_session_id: int | None = None,
-) -> None:
-    aware_datetime = ensure_aware_datetime(data_hora)
+) -> ScheduleConflict | None:
+    start = ensure_aware_datetime(start)
+    end = get_session_end_datetime(start, duration_minutes)
 
-    same_procedure = Sessao.objects.filter(procedimento=procedimento, data_hora=aware_datetime)
-    same_patient = Sessao.objects.filter(
-        procedimento__paciente=procedimento.paciente,
-        data_hora=aware_datetime,
+    queryset = Sessao.objects.select_related(
+        "procedimento",
+        "procedimento__paciente",
+        "procedimento__tipo_procedimento",
+    ).filter(
+        data_hora__lt=end,
+    ).exclude(
+        status=Sessao.STATUS_CANCELADA,
     )
 
     if ignore_session_id:
-        same_procedure = same_procedure.exclude(pk=ignore_session_id)
-        same_patient = same_patient.exclude(pk=ignore_session_id)
+        queryset = queryset.exclude(pk=ignore_session_id)
 
-    if same_procedure.exists():
-        raise ValidationError("Já existe uma sessão deste procedimento agendada para esta data e horário.")
+    for sessao in queryset.order_by("data_hora", "pk"):
+        sessao_inicio = ensure_aware_datetime(sessao.data_hora)
+        sessao_fim = get_session_end_datetime(sessao_inicio, sessao.duracao_minutos)
+        if sessao_fim > start:
+            return ScheduleConflict(
+                conflicting_session=sessao,
+                start=sessao_inicio,
+                end=sessao_fim,
+            )
 
-    if same_patient.exists():
-        raise ValidationError("O paciente já possui outra sessão agendada para esta data e horário.")
+    return None
+
+
+def validate_session_conflict(
+    *,
+    start: datetime,
+    duration_minutes: int,
+    ignore_session_id: int | None = None,
+) -> None:
+    conflict = find_schedule_conflict(
+        start=start,
+        duration_minutes=duration_minutes,
+        ignore_session_id=ignore_session_id,
+    )
+
+    if not conflict:
+        return
+
+    conflito_inicio = timezone.localtime(conflict.start).strftime("%d/%m/%Y %H:%M")
+    conflito_fim = timezone.localtime(conflict.end).strftime("%H:%M")
+    raise ValidationError(
+        f"Conflito de horário: este período já está ocupado ({conflito_inicio} - {conflito_fim})."
+    )
 
 
 @transaction.atomic
@@ -77,16 +120,18 @@ def create_session_for_procedimento(
     procedimento: Procedimento,
     *,
     data_hora: datetime,
+    duracao_minutos: int = 60,
     status: str = Sessao.STATUS_AGENDADA,
     assinatura_confirmada: bool = False,
     observacoes: str = "",
 ) -> Sessao:
     aware_datetime = ensure_aware_datetime(data_hora)
-    _validate_session_collision(procedimento, aware_datetime)
+    validate_session_conflict(start=aware_datetime, duration_minutes=duracao_minutos)
 
     sessao = Sessao.objects.create(
         procedimento=procedimento,
         data_hora=aware_datetime,
+        duracao_minutos=duracao_minutos,
         status=status,
         assinatura_confirmada=assinatura_confirmada,
         observacoes=observacoes,
@@ -101,18 +146,26 @@ def update_sessao(
     sessao: Sessao,
     *,
     data_hora: datetime,
+    duracao_minutos: int,
     status: str,
     assinatura_confirmada: bool,
     observacoes: str,
 ) -> Sessao:
     aware_datetime = ensure_aware_datetime(data_hora)
-    _validate_session_collision(sessao.procedimento, aware_datetime, ignore_session_id=sessao.pk)
+    validate_session_conflict(
+        start=aware_datetime,
+        duration_minutes=duracao_minutos,
+        ignore_session_id=sessao.pk,
+    )
 
     sessao.data_hora = aware_datetime
+    sessao.duracao_minutos = duracao_minutos
     sessao.status = status
     sessao.assinatura_confirmada = assinatura_confirmada
     sessao.observacoes = observacoes
-    sessao.save(update_fields=["data_hora", "status", "assinatura_confirmada", "observacoes", "updated_at"])
+    sessao.save(
+        update_fields=["data_hora", "duracao_minutos", "status", "assinatura_confirmada", "observacoes", "updated_at"]
+    )
     resequence_sessoes(sessao.procedimento_id)
     sessao.refresh_from_db(fields=["numero"])
     return sessao
@@ -122,8 +175,13 @@ def create_initial_session_for_procedure(
     procedimento: Procedimento,
     *,
     data_hora: datetime,
+    duracao_minutos: int,
 ) -> Sessao:
-    return create_session_for_procedimento(procedimento, data_hora=data_hora)
+    return create_session_for_procedimento(
+        procedimento,
+        data_hora=data_hora,
+        duracao_minutos=duracao_minutos,
+    )
 
 
 @transaction.atomic
@@ -134,9 +192,16 @@ def generate_sessions_for_month_by_weekday(
     month: int,
     weekdays: list[int],
     start_time: time,
+    end_time: time,
 ) -> BulkSessionGenerationResult:
     if not weekdays:
         raise ValidationError("Selecione ao menos um dia da semana para o agendamento em lote.")
+    if end_time <= start_time:
+        raise ValidationError("O horário final deve ser maior que o horário inicial.")
+
+    duration_minutes = int(
+        (datetime.combine(date.today(), end_time) - datetime.combine(date.today(), start_time)).total_seconds() // 60
+    )
 
     _, month_days = calendar.monthrange(year, month)
     candidate_datetimes: list[datetime] = []
@@ -158,6 +223,7 @@ def generate_sessions_for_month_by_weekday(
                 create_session_for_procedimento(
                     procedimento,
                     data_hora=candidate,
+                    duracao_minutos=duration_minutes,
                 )
             )
         except ValidationError:

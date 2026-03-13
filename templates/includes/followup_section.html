@@ -74,6 +74,10 @@
                                             <label class="form-check-label" for="assinatura-{{ sessao.pk }}">Assin.</label>
                                         </div>
                                     </div>
+                                    <div class="col-md-2 mb-2">
+                                        <label class="form-label">Horário final</label>
+                                        <input type="time" name="hora_final" value="{{ sessao.data_hora_fim|date:'H:i' }}" class="form-control" required>
+                                    </div>
                                 </div>
                                 <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="3">{{ sessao.observacoes }}</textarea></div>
                                 <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
@@ -132,6 +136,10 @@
                                             <label class="form-check-label" for="assinatura-passada-{{ sessao.pk }}">Assin.</label>
                                         </div>
                                     </div>
+                                    <div class="col-md-2 mb-2">
+                                        <label class="form-label">Horário final</label>
+                                        <input type="time" name="hora_final" value="{{ sessao.data_hora_fim|date:'H:i' }}" class="form-control" required>
+                                    </div>
                                 </div>
                                 <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="3">{{ sessao.observacoes }}</textarea></div>
                                 <button class="btn btn-sm btn-primary" type="submit">Salvar alterações</button>
@@ -172,6 +180,10 @@
                         </div>
                         <div class="col-md-2 mb-3 d-flex align-items-end">
                             <div class="form-check"><input class="form-check-input" type="checkbox" name="assinatura_confirmada" id="nova-assinatura"><label class="form-check-label" for="nova-assinatura">Assin.</label></div>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Horário final</label>
+                            <input type="time" name="hora_final" class="form-control" required>
                         </div>
                     </div>
                     <div class="mb-2"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="4" placeholder="Resumo da sessão"></textarea></div>

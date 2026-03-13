@@ -280,9 +280,10 @@ class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
                     create_initial_session_for_procedure(
                         self.object,
                         data_hora=form.get_initial_session_datetime(),
+                        duracao_minutos=form.get_initial_session_duration_minutes(),
                     )
         except ValidationError as exc:
-            form.add_error("data_sessao_inicial", exc.message)
+            form.add_error("hora_sessao_inicial", exc.message)
             return self.form_invalid(form)
 
         if form.cleaned_data["modo_agendamento"] == ProcedimentoForm.MODO_AGENDAMENTO_UNICO:
@@ -349,6 +350,7 @@ class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
             month=referencia_mes.month,
             weekdays=form.cleaned_data["dias_semana"],
             start_time=form.cleaned_data["hora_inicial"],
+            end_time=form.cleaned_data["hora_final"],
         )
 
         if not result.created_sessions:
@@ -363,9 +365,13 @@ class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
             )
 
         if result.skipped_conflicts:
+            skipped_labels = ", ".join(
+                timezone.localtime(conflict).strftime("%d/%m/%Y %H:%M")
+                for conflict in result.skipped_conflicts
+            )
             messages.warning(
                 self.request,
-                f"{len(result.skipped_conflicts)} data(s) foram ignoradas por conflito de agenda.",
+                f"{len(result.skipped_conflicts)} sessão(ões) foram ignoradas por conflito de horário: {skipped_labels}.",
             )
 
         return redirect("procedure-detail", pk=self.procedimento.pk)
@@ -392,13 +398,14 @@ def add_sessao(request, pk):
             create_session_for_procedimento(
                 procedimento,
                 data_hora=form.cleaned_data["data_hora"],
+                duracao_minutos=form.get_duration_minutes(),
                 status=form.cleaned_data["status"],
                 assinatura_confirmada=form.cleaned_data["assinatura_confirmada"],
                 observacoes=form.cleaned_data["observacoes"],
             )
             messages.success(request, "Sessão adicionada com sucesso.")
         except ValidationError as exc:
-            messages.error(request, exc.message)
+            messages.warning(request, exc.message)
     else:
         messages.error(request, "Não foi possível adicionar a sessão. Verifique os dados informados.")
     return redirect("procedure-detail", pk=procedimento.pk)
@@ -414,13 +421,14 @@ def edit_sessao(request, session_id):
             update_sessao(
                 sessao,
                 data_hora=form.cleaned_data["data_hora"],
+                duracao_minutos=form.get_duration_minutes(),
                 status=form.cleaned_data["status"],
                 assinatura_confirmada=form.cleaned_data["assinatura_confirmada"],
                 observacoes=form.cleaned_data["observacoes"],
             )
             messages.success(request, "Sessão atualizada com sucesso.")
         except ValidationError as exc:
-            messages.error(request, exc.message)
+            messages.warning(request, exc.message)
     else:
         messages.error(request, "Não foi possível atualizar a sessão.")
     return redirect("procedure-detail", pk=sessao.procedimento_id)

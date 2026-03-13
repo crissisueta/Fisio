@@ -105,6 +105,11 @@ class ProcedimentoForm(forms.ModelForm):
         widget=forms.TimeInput(attrs={"class": "form-control", "type": "time"}, format="%H:%M"),
         label="Horário da primeira sessão",
     )
+    hora_fim_sessao_inicial = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={"class": "form-control", "type": "time"}, format="%H:%M"),
+        label="Horário final da primeira sessão",
+    )
 
     class Meta:
         model = Procedimento
@@ -127,9 +132,10 @@ class ProcedimentoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["data_sessao_inicial"].input_formats = ["%Y-%m-%d"]
         self.fields["hora_sessao_inicial"].input_formats = ["%H:%M"]
+        self.fields["hora_fim_sessao_inicial"].input_formats = ["%H:%M"]
 
         if not self.enable_schedule_fields:
-            for field_name in ("modo_agendamento", "data_sessao_inicial", "hora_sessao_inicial"):
+            for field_name in ("modo_agendamento", "data_sessao_inicial", "hora_sessao_inicial", "hora_fim_sessao_inicial"):
                 self.fields.pop(field_name, None)
 
     def clean(self):
@@ -140,12 +146,17 @@ class ProcedimentoForm(forms.ModelForm):
         modo_agendamento = cleaned_data.get("modo_agendamento")
         data_sessao_inicial = cleaned_data.get("data_sessao_inicial")
         hora_sessao_inicial = cleaned_data.get("hora_sessao_inicial")
+        hora_fim_sessao_inicial = cleaned_data.get("hora_fim_sessao_inicial")
 
         if modo_agendamento == self.MODO_AGENDAMENTO_UNICO:
             if not data_sessao_inicial:
                 self.add_error("data_sessao_inicial", "Informe a data da primeira sessão.")
             if not hora_sessao_inicial:
                 self.add_error("hora_sessao_inicial", "Informe o horário da primeira sessão.")
+            if not hora_fim_sessao_inicial:
+                self.add_error("hora_fim_sessao_inicial", "Informe o horário final da primeira sessão.")
+            if hora_sessao_inicial and hora_fim_sessao_inicial and hora_fim_sessao_inicial <= hora_sessao_inicial:
+                self.add_error("hora_fim_sessao_inicial", "O horário final deve ser maior que o horário inicial.")
 
         return cleaned_data
 
@@ -154,8 +165,19 @@ class ProcedimentoForm(forms.ModelForm):
         hora_sessao = self.cleaned_data["hora_sessao_inicial"]
         return datetime.combine(data_sessao, hora_sessao)
 
+    def get_initial_session_duration_minutes(self):
+        hora_inicial = self.cleaned_data["hora_sessao_inicial"]
+        hora_final = self.cleaned_data["hora_fim_sessao_inicial"]
+        return int((datetime.combine(datetime.today(), hora_final) - datetime.combine(datetime.today(), hora_inicial)).total_seconds() // 60)
+
 
 class SessaoForm(forms.ModelForm):
+    hora_final = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={"class": "form-control", "type": "time"}, format="%H:%M"),
+        label="Horário final",
+    )
+
     class Meta:
         model = Sessao
         fields = ["data_hora", "status", "assinatura_confirmada", "observacoes"]
@@ -178,6 +200,30 @@ class SessaoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["data_hora"].input_formats = ["%Y-%m-%dT%H:%M"]
+        self.fields["hora_final"].input_formats = ["%H:%M"]
+
+        if self.instance and self.instance.pk and self.instance.data_hora:
+            self.fields["hora_final"].initial = self.instance.data_hora_fim.strftime("%H:%M")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        data_hora = cleaned_data.get("data_hora")
+        hora_final = cleaned_data.get("hora_final")
+
+        if data_hora and not hora_final:
+            self.add_error("hora_final", "Informe o horário final da sessão.")
+
+        if data_hora and hora_final:
+            hora_inicial = data_hora.time()
+            if hora_final <= hora_inicial:
+                self.add_error("hora_final", "O horário final deve ser maior que o horário inicial.")
+
+        return cleaned_data
+
+    def get_duration_minutes(self):
+        data_hora = self.cleaned_data["data_hora"]
+        hora_final = self.cleaned_data["hora_final"]
+        return int((datetime.combine(data_hora.date(), hora_final) - datetime.combine(data_hora.date(), data_hora.time())).total_seconds() // 60)
 
 
 class ProcedimentoBulkScheduleForm(forms.Form):
@@ -201,7 +247,7 @@ class ProcedimentoBulkScheduleForm(forms.Form):
         widget=forms.TimeInput(attrs={"class": "form-control", "type": "time"}, format="%H:%M"),
         input_formats=["%H:%M"],
         label="Horário final",
-        help_text="Opcional. Usado apenas para validação e conferência visual neste fluxo.",
+        help_text="Define a duração de cada sessão gerada neste período.",
     )
 
     def clean_dias_semana(self):
@@ -215,6 +261,8 @@ class ProcedimentoBulkScheduleForm(forms.Form):
         hora_inicial = cleaned_data.get("hora_inicial")
         hora_final = cleaned_data.get("hora_final")
 
+        if hora_inicial and not hora_final:
+            self.add_error("hora_final", "Informe o horário final das sessões deste período.")
         if hora_inicial and hora_final and hora_final <= hora_inicial:
             self.add_error("hora_final", "O horário final deve ser maior que o horário inicial.")
 

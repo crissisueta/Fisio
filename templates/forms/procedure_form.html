@@ -57,10 +57,15 @@
                             {{ form.data_sessao_inicial }}
                             {% if form.data_sessao_inicial.errors %}<div class="invalid-feedback d-block">{{ form.data_sessao_inicial.errors }}</div>{% endif %}
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label for="{{ form.hora_sessao_inicial.id_for_label }}" class="form-label">{{ form.hora_sessao_inicial.label }}</label>
                             {{ form.hora_sessao_inicial }}
                             {% if form.hora_sessao_inicial.errors %}<div class="invalid-feedback d-block">{{ form.hora_sessao_inicial.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ form.hora_fim_sessao_inicial.id_for_label }}" class="form-label">{{ form.hora_fim_sessao_inicial.label }}</label>
+                            {{ form.hora_fim_sessao_inicial }}
+                            {% if form.hora_fim_sessao_inicial.errors %}<div class="invalid-feedback d-block">{{ form.hora_fim_sessao_inicial.errors }}</div>{% endif %}
                         </div>
                     </div>
                 </div>

@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.utils import timezone
 
@@ -216,6 +218,7 @@ class Sessao(SoftDeleteModel, TimestampedModel):
 
     procedimento = models.ForeignKey(Procedimento, related_name="sessoes", on_delete=models.CASCADE)
     data_hora = models.DateTimeField()
+    duracao_minutos = models.PositiveIntegerField(default=60)
     numero = models.PositiveIntegerField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AGENDADA)
     assinatura_confirmada = models.BooleanField(default=False)
@@ -228,6 +231,10 @@ class Sessao(SoftDeleteModel, TimestampedModel):
 
     def __str__(self):
         return f"{self.procedimento} - {self.data_hora}"
+
+    @property
+    def data_hora_fim(self):
+        return self.data_hora + timedelta(minutes=self.duracao_minutos)
 
 
 class FichaExercicios(SoftDeleteModel, TimestampedModel):

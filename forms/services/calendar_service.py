@@ -42,6 +42,7 @@ def build_calendar_events():
 
     for sessao in queryset:
         data_hora = _normalizar_data_hora(sessao.data_hora)
+        data_hora_fim = _normalizar_data_hora(sessao.data_hora_fim)
         paciente_nome = sessao.procedimento.paciente.nome
         tipo_nome = sessao.procedimento.tipo_procedimento.nome
 
@@ -49,7 +50,7 @@ def build_calendar_events():
             {
                 "title": f"{paciente_nome} - {tipo_nome}",
                 "start": localtime(data_hora).isoformat(),
-                "end": None,
+                "end": localtime(data_hora_fim).isoformat(),
                 "url": f"/forms/procedimentos/{sessao.procedimento_id}/",
                 "procedure_type": tipo_nome,
                 "procedure_color": _cor_procedimento(tipo_nome),
