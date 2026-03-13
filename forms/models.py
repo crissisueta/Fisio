@@ -288,6 +288,8 @@ class ExercicioCatalogo(SoftDeleteModel, TimestampedModel):
     instrucoes = models.TextField(blank=True)
     observacoes = models.TextField(blank=True)
     ativo = models.BooleanField(default=True)
+    max_sessoes_consecutivas = models.PositiveIntegerField(default=2)
+    sessoes_ate_cooldown = models.PositiveIntegerField(default=2)
 
     class Meta:
         verbose_name = "Exercício"
@@ -341,3 +343,46 @@ class ProcedimentoExercicio(SoftDeleteModel, TimestampedModel):
 
     def __str__(self):
         return f"{self.procedimento} - {self.exercicio}"
+
+
+class SessaoExercicio(SoftDeleteModel, TimestampedModel):
+    """Vínculo entre sessão específica e exercício selecionado."""
+    ACTIVE_RELATED_FILTERS = {
+        "sessao__is_active": True,
+        "sessao__procedimento__is_active": True,
+        "sessao__procedimento__paciente__is_active": True,
+        "sessao__procedimento__tipo_procedimento__is_active": True,
+        "exercicio__is_active": True,
+        "exercicio__categoria__is_active": True,
+    }
+
+    STATUS_PLANEJADO = ProcedimentoExercicio.STATUS_PLANEJADO
+    STATUS_EM_ANDAMENTO = ProcedimentoExercicio.STATUS_EM_ANDAMENTO
+    STATUS_CONCLUIDO = ProcedimentoExercicio.STATUS_CONCLUIDO
+    STATUS_CHOICES = ProcedimentoExercicio.STATUS_CHOICES
+
+    sessao = models.ForeignKey(Sessao, on_delete=models.CASCADE, related_name="sessao_exercicios")
+    exercicio = models.ForeignKey(ExercicioCatalogo, on_delete=models.PROTECT, related_name="sessao_exercicios")
+    ordem = models.PositiveIntegerField(default=0)
+    series = models.CharField(max_length=50, blank=True)
+    repeticoes = models.CharField(max_length=50, blank=True)
+    frequencia = models.CharField(max_length=100, blank=True)
+    progressao = models.TextField(blank=True)
+    observacoes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PLANEJADO)
+    assigned_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "Exercício da Sessão"
+        verbose_name_plural = "Exercícios da Sessão"
+        ordering = ["ordem", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sessao", "exercicio"],
+                condition=models.Q(is_active=True),
+                name="unique_active_exercicio_por_sessao",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.sessao} - {self.exercicio}"

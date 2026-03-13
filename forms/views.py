@@ -17,9 +17,9 @@ from .forms import (
     ExercicioCatalogoForm,
     PacienteForm,
     ProcedimentoBulkScheduleForm,
-    ProcedimentoExercicioSelectionForm,
     ProcedimentoForm,
     SessaoForm,
+    SessaoExercicioSelectionForm,
     TipoProcedimentoForm,
 )
 from .models import (
@@ -28,11 +28,12 @@ from .models import (
     ExercicioCatalogo,
     Paciente,
     Procedimento,
-    ProcedimentoExercicio,
     Sessao,
+    SessaoExercicio,
     TipoProcedimento,
 )
 from .services.calendar_service import build_calendar_events
+from .services.exercise_history_service import SessionExerciseHistoryService
 from .services.scheduling_service import (
     create_initial_session_for_procedure,
     create_session_for_procedimento,
@@ -217,6 +218,7 @@ class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
         return Procedimento.objects.select_related("paciente", "tipo_procedimento").prefetch_related(
             "sessoes",
             "procedimento_exercicios__exercicio__categoria",
+            "sessoes__sessao_exercicios__exercicio__categoria",
         )
 
     def get_context_data(self, **kwargs):
@@ -234,18 +236,26 @@ class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
         context["sessoes_futuras"] = sessoes_futuras
         context["sessoes_passadas"] = sessoes_passadas
         context["sessao_form"] = SessaoForm()
-        context["aba_ativa"] = self.request.GET.get("aba", "sessoes")
+        context["aba_ativa"] = "sessoes"
+        context["exercicios_habilitados"] = self.object.tipo_procedimento.habilita_exercicios
 
-        exercicios_vinculados = self.object.procedimento_exercicios.filter(is_active=True).select_related(
-            "exercicio",
-            "exercicio__categoria",
-        )
-        context["exercicios_vinculados"] = exercicios_vinculados
         if self.object.tipo_procedimento.habilita_exercicios:
-            procedimento_exercicio_form = ProcedimentoExercicioSelectionForm(procedimento=self.object)
-            context["procedimento_exercicio_form"] = procedimento_exercicio_form
-            context["exercicios_agrupados"] = procedimento_exercicio_form.get_exercicios_agrupados()
-            context["exercicios_selecionados_ids"] = set(procedimento_exercicio_form.fields["exercicios"].initial)
+            exercicios_catalogo = list(
+                ExercicioCatalogo.objects.filter(is_active=True, ativo=True)
+                .select_related("categoria")
+                .order_by("categoria__nome", "nome")
+            )
+            history_service = SessionExerciseHistoryService(self.object)
+            for sessao in todas_sessoes:
+                selected_ids, _source = history_service.get_selected_ids_for_session(sessao)
+                form = SessaoExercicioSelectionForm(sessao=sessao, selected_ids=selected_ids)
+                selected_ids = set(form.fields["exercicios"].initial)
+                status_map = history_service.get_status_map_for_session(sessao, exercicios_catalogo)
+                sessao.exercicio_modal_grupos = form.get_exercicios_agrupados(status_map)
+                sessao.exercicios_selecionados_ids = selected_ids
+                sessao.exercicio_selection_source = history_service.get_selection_source_for_session(sessao)
+
+                sessao.exercicio_itens = history_service.get_assigned_items_for_session(sessao)
         return context
 
 
@@ -433,27 +443,31 @@ def update_status_sessao(request, session_id, status):
 
 @login_required
 @require_POST
-def update_procedimento_exercicios(request, pk):
-    procedimento = get_object_or_404(
-        Procedimento.objects.select_related("tipo_procedimento", "paciente"),
-        pk=pk,
+def update_sessao_exercicios(request, session_id):
+    sessao = get_object_or_404(
+        Sessao.objects.select_related("procedimento", "procedimento__tipo_procedimento", "procedimento__paciente"),
+        pk=session_id,
     )
+    procedimento = sessao.procedimento
     if not procedimento.tipo_procedimento.habilita_exercicios:
         messages.error(request, "Este tipo de procedimento não possui gerenciamento de exercícios habilitado.")
-        return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=sessoes")
+        return redirect("procedure-detail", pk=procedimento.pk)
 
-    form = ProcedimentoExercicioSelectionForm(request.POST, procedimento=procedimento)
+    legacy_items = list(procedimento.procedimento_exercicios.filter(is_active=True).select_related("exercicio"))
+    fallback_ids = [item.exercicio_id for item in legacy_items]
+    form = SessaoExercicioSelectionForm(request.POST, sessao=sessao, selected_ids=fallback_ids)
     if not form.is_valid():
-        messages.error(request, "Não foi possível atualizar os exercícios do procedimento.")
-        return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=exercicios")
+        messages.error(request, "Não foi possível atualizar os exercícios da sessão.")
+        return redirect("procedure-detail", pk=procedimento.pk)
 
     exercicios_selecionados = list(form.cleaned_data["exercicios"])
     selecionados_ids = {exercicio.pk for exercicio in exercicios_selecionados}
 
     existentes = {
         item.exercicio_id: item
-        for item in ProcedimentoExercicio.all_objects.filter(procedimento=procedimento).select_related("exercicio")
+        for item in SessaoExercicio.all_objects.filter(sessao=sessao).select_related("exercicio")
     }
+    legacy_by_exercicio = {item.exercicio_id: item for item in legacy_items}
 
     for ordem, exercicio in enumerate(exercicios_selecionados, start=1):
         item = existentes.get(exercicio.pk)
@@ -471,18 +485,29 @@ def update_procedimento_exercicios(request, pk):
                     update_fields.append("updated_at")
                 item.save(update_fields=update_fields)
         else:
-            ProcedimentoExercicio.objects.create(
-                procedimento=procedimento,
+            legacy_item = legacy_by_exercicio.get(exercicio.pk)
+            SessaoExercicio.objects.create(
+                sessao=sessao,
                 exercicio=exercicio,
                 ordem=ordem,
+                series=legacy_item.series if legacy_item else "",
+                repeticoes=legacy_item.repeticoes if legacy_item else "",
+                frequencia=legacy_item.frequencia if legacy_item else "",
+                progressao=legacy_item.progressao if legacy_item else "",
+                observacoes=legacy_item.observacoes if legacy_item else "",
+                status=legacy_item.status if legacy_item else SessaoExercicio.STATUS_PLANEJADO,
             )
 
-    ids_para_desativar = [item.pk for exercicio_id, item in existentes.items() if exercicio_id not in selecionados_ids and item.is_active]
+    ids_para_desativar = [
+        item.pk
+        for exercicio_id, item in existentes.items()
+        if exercicio_id not in selecionados_ids and item.is_active
+    ]
     if ids_para_desativar:
-        ProcedimentoExercicio.objects.filter(pk__in=ids_para_desativar).delete()
+        SessaoExercicio.objects.filter(pk__in=ids_para_desativar).delete()
 
-    messages.success(request, "Lista de exercícios do procedimento atualizada com sucesso.")
-    return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=exercicios")
+    messages.success(request, f"Exercícios da sessão {sessao.numero or '-'} atualizados com sucesso.")
+    return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}#sessao-{sessao.pk}")
 
 
 @login_required

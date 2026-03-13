@@ -9,6 +9,17 @@
     .timeline-col { border-left: 3px solid #dee2e6; padding-left: 16px; }
     .sessao-card.proxima-sessao { border: 2px solid #0d6efd; box-shadow: 0 0.3rem 0.8rem rgba(13, 110, 253, 0.15); }
     .procedure-tab-content { margin-top: 1.5rem; }
+    .session-exercise-panel { border-top: 1px solid #e9ecef; margin-top: 1rem; padding-top: 1rem; }
+    .exercise-item { position: relative; border: 1px solid #dee2e6; border-radius: 10px; padding: 12px 14px; background: #fff; }
+    .exercise-item-red { border-color: #dc3545; background: rgba(220, 53, 69, 0.06); }
+    .exercise-item-blue { border-color: #0d6efd; background: rgba(13, 110, 253, 0.06); }
+    .exercise-item-normal { border-color: #dee2e6; }
+    .exercise-warning-badge { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 999px; background: #ffc107; color: #212529; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; border: 1px solid rgba(0, 0, 0, 0.12); }
+    .exercise-list-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .exercise-item:hover { box-shadow: 0 0.35rem 0.9rem rgba(33, 37, 41, 0.08); }
+    .session-exercise-option { cursor: pointer; }
+    .session-exercise-option input { position: absolute; top: 14px; left: 14px; }
+    .session-exercise-option .ms-4 { margin-left: 1.8rem !important; }
 </style>
 {% endblock %}
 
@@ -59,30 +70,43 @@
 
 <ul class="nav nav-tabs">
     <li class="nav-item">
-        <a
-            class="nav-link {% if aba_ativa != 'exercicios' %}active{% endif %}"
-            href="{% url 'procedure-detail' procedimento.pk %}?aba=sessoes"
-        >
-            Sessões
-        </a>
+        <span class="nav-link active">Sessões</span>
     </li>
-    {% if procedimento.tipo_procedimento.habilita_exercicios %}
-    <li class="nav-item">
-        <a
-            class="nav-link {% if aba_ativa == 'exercicios' %}active{% endif %}"
-            href="{% url 'procedure-detail' procedimento.pk %}?aba=exercicios"
-        >
-            Exercícios
-        </a>
-    </li>
-    {% endif %}
 </ul>
 
 <div class="procedure-tab-content">
-    {% if aba_ativa == 'exercicios' and procedimento.tipo_procedimento.habilita_exercicios %}
-        {% include 'includes/exercise_section.html' %}
-    {% else %}
-        {% include 'includes/followup_section.html' %}
-    {% endif %}
+    {% include 'includes/followup_section.html' %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+        new bootstrap.Tooltip(element);
+    });
+
+    document.querySelectorAll('.session-exercise-search').forEach(function (input) {
+        input.addEventListener('input', function () {
+            var query = input.value.trim().toLowerCase();
+            var modal = document.getElementById(input.dataset.searchTarget);
+            if (!modal) {
+                return;
+            }
+
+            modal.querySelectorAll('.session-exercise-group').forEach(function (group) {
+                var visibleCount = 0;
+                group.querySelectorAll('.session-exercise-option').forEach(function (option) {
+                    var exerciseName = option.dataset.exerciseName || '';
+                    var categoryName = option.dataset.categoryName || '';
+                    var match = !query || exerciseName.indexOf(query) !== -1 || categoryName.indexOf(query) !== -1;
+                    option.style.display = match ? '' : 'none';
+                    if (match) {
+                        visibleCount += 1;
+                    }
+                });
+                group.style.display = visibleCount ? '' : 'none';
+            });
+        });
+    });
+</script>
 {% endblock %}

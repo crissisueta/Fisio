@@ -35,7 +35,7 @@ from .views import (
     edit_sessao,
     get_paciente_data,
     toggle_procedimento_concluido,
-    update_procedimento_exercicios,
+    update_sessao_exercicios,
     update_status_sessao,
 )
 
@@ -62,8 +62,6 @@ urlpatterns = [
     path("procedimentos/<int:pk>/editar/", ProcedimentoUpdateView.as_view(), name="procedure-update"),
     path("procedimentos/<int:pk>/deletar/", ProcedimentoDeleteView.as_view(), name="procedure-delete"),
     path("procedimentos/<int:pk>/toggle-concluido/", toggle_procedimento_concluido, name="procedure-toggle-complete"),
-    path("procedimentos/<int:pk>/exercicios/", update_procedimento_exercicios, name="procedure-exercise-update"),
-
     path("exercicios/", ExercicioCatalogoListView.as_view(), name="exercise-list"),
     path("exercicios/novo/", ExercicioCatalogoCreateView.as_view(), name="exercise-create"),
     path("exercicios/<int:pk>/editar/", ExercicioCatalogoUpdateView.as_view(), name="exercise-update"),
@@ -81,6 +79,7 @@ urlpatterns = [
 
     path("procedimentos/<int:pk>/sessoes/nova/", add_sessao, name="procedure-session-add"),
     path("sessoes/<int:session_id>/editar/", edit_sessao, name="procedure-session-edit"),
+    path("sessoes/<int:session_id>/exercicios/", update_sessao_exercicios, name="session-exercise-update"),
     path("sessoes/<int:session_id>/status/<slug:status>/", update_status_sessao, name="procedure-session-status"),
 
     path("calendario/", CalendarDashboardView.as_view(), name="calendar-dashboard"),

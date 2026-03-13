@@ -9,6 +9,7 @@ from .models import (
     Procedimento,
     ProcedimentoExercicio,
     Sessao,
+    SessaoExercicio,
     TipoAvaliacao,
     TipoProcedimento,
 )
@@ -84,6 +85,16 @@ class ProcedimentoExercicioInline(admin.TabularInline):
         return self.model.all_objects.get_queryset().select_related("exercicio")
 
 
+class SessaoExercicioInline(admin.TabularInline):
+    model = SessaoExercicio
+    extra = 0
+    autocomplete_fields = ("exercicio",)
+    fields = ("exercicio", "ordem", "series", "repeticoes", "frequencia", "status", "observacoes", "is_active")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.get_queryset().select_related("exercicio")
+
+
 @admin.register(Procedimento)
 class ProcedimentoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ("paciente", "tipo_procedimento", "concluido", "is_active", "created_at")
@@ -97,6 +108,7 @@ class SessaoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ("procedimento", "data_hora", "numero", "status", "assinatura_confirmada", "is_active")
     list_filter = ("is_active", "status", "assinatura_confirmada", "data_hora")
     search_fields = ("procedimento__paciente__nome", "procedimento__tipo_procedimento__nome", "observacoes")
+    inlines = [SessaoExercicioInline]
 
 
 @admin.register(FichaExercicios)
@@ -115,7 +127,15 @@ class CategoriaExercicioAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(ExercicioCatalogo)
 class ExercicioCatalogoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ("nome", "categoria", "ativo", "is_active", "created_at")
+    list_display = (
+        "nome",
+        "categoria",
+        "max_sessoes_consecutivas",
+        "sessoes_ate_cooldown",
+        "ativo",
+        "is_active",
+        "created_at",
+    )
     list_filter = ("is_active", "ativo", "categoria", "created_at")
     search_fields = ("nome", "categoria__nome", "descricao", "instrucoes", "observacoes")
     autocomplete_fields = ("categoria",)
@@ -132,3 +152,16 @@ class ProcedimentoExercicioAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         "observacoes",
     )
     autocomplete_fields = ("procedimento", "exercicio")
+
+
+@admin.register(SessaoExercicio)
+class SessaoExercicioAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("sessao", "exercicio", "status", "ordem", "is_active", "created_at")
+    list_filter = ("is_active", "status", "created_at")
+    search_fields = (
+        "sessao__procedimento__paciente__nome",
+        "sessao__procedimento__tipo_procedimento__nome",
+        "exercicio__nome",
+        "observacoes",
+    )
+    autocomplete_fields = ("sessao", "exercicio")

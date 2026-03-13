@@ -1,0 +1,153 @@
+{% if exercicios_habilitados %}
+<div class="session-exercise-panel">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h6 class="mb-1">Exercícios da sessão</h6>
+            <p class="text-muted small mb-0">Gerencie os exercícios desta sessão e acompanhe o histórico recente.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="badge bg-light text-dark border">{{ sessao.exercicio_itens|length }} exercício(s)</span>
+            <button
+                class="btn btn-sm btn-primary"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#sessionExerciseModal-{{ sessao.pk }}"
+            >
+                Adicionar exercícios
+            </button>
+        </div>
+    </div>
+
+    {% if sessao.exercicio_selection_source == 'procedimento' and sessao.exercicio_itens %}
+    <div class="alert alert-light border small py-2 px-3">
+        Esta sessão ainda está usando a lista legada do procedimento como base. Ao salvar aqui, a sessão passa a ter prescrição própria.
+    </div>
+    {% endif %}
+
+    {% if sessao.exercicio_itens %}
+    <div class="exercise-list-grid">
+        {% for exercicio_data in sessao.exercicio_itens %}
+        <div class="exercise-item {{ exercicio_data.status.border_class }}">
+            {% if exercicio_data.status.warning %}
+            <span
+                class="exercise-warning-badge"
+                data-bs-toggle="tooltip"
+                data-bs-title="{{ exercicio_data.status.warning_message }}"
+            >
+                !
+            </span>
+            {% endif %}
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <div>
+                    <strong>{{ exercicio_data.item.exercicio.nome }}</strong>
+                    <div class="small text-muted">{{ exercicio_data.item.exercicio.categoria.nome }}</div>
+                </div>
+                <span
+                    class="{{ exercicio_data.status.badge_class }}"
+                    data-bs-toggle="tooltip"
+                    data-bs-title="{{ exercicio_data.status.tooltip }}"
+                >
+                    {{ exercicio_data.status.label }}
+                </span>
+            </div>
+            {% if exercicio_data.item.exercicio.instrucoes %}
+            <div class="small text-muted">{{ exercicio_data.item.exercicio.instrucoes|truncatechars:120 }}</div>
+            {% else %}
+            <div class="small text-muted">Sem instruções cadastradas.</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Nenhum exercício foi vinculado a esta sessão.</p>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="sessionExerciseModal-{{ sessao.pk }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="post" action="{% url 'session-exercise-update' sessao.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title mb-1">Adicionar exercícios</h5>
+                        <p class="text-muted small mb-0">Sessão {{ sessao.numero|default:"-" }} • {{ sessao.data_hora|date:"d/m/Y H:i" }}</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <input
+                            type="search"
+                            class="form-control session-exercise-search"
+                            placeholder="Buscar exercício por nome ou categoria"
+                            data-search-target="sessionExerciseModal-{{ sessao.pk }}"
+                        >
+                    </div>
+                    {% if sessao.exercicio_modal_grupos %}
+                        {% for grupo in sessao.exercicio_modal_grupos %}
+                        <div class="mb-4 session-exercise-group" data-group-name="{{ grupo.categoria.nome|lower }}">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <div>
+                                    <h6 class="text-uppercase text-muted small mb-1">{{ grupo.categoria.nome }}</h6>
+                                    {% if grupo.categoria.descricao %}
+                                    <p class="text-muted small mb-0">{{ grupo.categoria.descricao }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="exercise-list-grid">
+                                {% for exercicio_data in grupo.exercicios %}
+                                <label
+                                    class="exercise-item {{ exercicio_data.status.border_class }} h-100 session-exercise-option"
+                                    data-exercise-name="{{ exercicio_data.obj.nome|lower }}"
+                                    data-category-name="{{ grupo.categoria.nome|lower }}"
+                                >
+                                    {% if exercicio_data.status.warning %}
+                                    <span
+                                        class="exercise-warning-badge"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="{{ exercicio_data.status.warning_message }}"
+                                    >
+                                        !
+                                    </span>
+                                    {% endif %}
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="exercicios"
+                                        value="{{ exercicio_data.obj.pk }}"
+                                        {% if exercicio_data.obj.pk in sessao.exercicios_selecionados_ids %}checked{% endif %}
+                                    >
+                                    <div class="ms-4">
+                                        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                                            <strong>{{ exercicio_data.obj.nome }}</strong>
+                                            <span
+                                                class="{{ exercicio_data.status.badge_class }}"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-title="{{ exercicio_data.status.tooltip }}"
+                                            >
+                                                {{ exercicio_data.status.label }}
+                                            </span>
+                                        </div>
+                                        {% if exercicio_data.obj.descricao %}
+                                        <div class="small text-muted">{{ exercicio_data.obj.descricao|truncatechars:100 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="alert alert-info mb-0">Nenhum exercício ativo está cadastrado.</div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Salvar exercícios</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}

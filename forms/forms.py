@@ -5,7 +5,15 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
-from .models import Avaliacao, CategoriaExercicio, ExercicioCatalogo, Paciente, Procedimento, Sessao, TipoProcedimento
+from .models import (
+    Avaliacao,
+    CategoriaExercicio,
+    ExercicioCatalogo,
+    Paciente,
+    Procedimento,
+    Sessao,
+    TipoProcedimento,
+)
 from .services.scheduling_service import WEEKDAY_CHOICES
 
 
@@ -213,7 +221,7 @@ class ProcedimentoBulkScheduleForm(forms.Form):
         return cleaned_data
 
 
-class ProcedimentoExercicioSelectionForm(forms.Form):
+class SessaoExercicioSelectionForm(forms.Form):
     exercicios = forms.ModelMultipleChoiceField(
         queryset=ExercicioCatalogo.objects.filter(ativo=True).order_by("nome"),
         required=False,
@@ -222,21 +230,35 @@ class ProcedimentoExercicioSelectionForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
-        procedimento = kwargs.pop("procedimento")
+        sessao = kwargs.pop("sessao")
+        selected_ids = kwargs.pop("selected_ids", None)
         super().__init__(*args, **kwargs)
-        self.procedimento = procedimento
-        self.fields["exercicios"].queryset = ExercicioCatalogo.objects.filter(
-            is_active=True,
-            ativo=True,
-        ).select_related("categoria").order_by("categoria__nome", "nome")
-        self.fields["exercicios"].initial = list(
-            procedimento.procedimento_exercicios.filter(is_active=True).values_list("exercicio_id", flat=True)
+        self.sessao = sessao
+        self.fields["exercicios"].queryset = (
+            ExercicioCatalogo.objects.filter(
+                is_active=True,
+                ativo=True,
+            )
+            .select_related("categoria")
+            .order_by("categoria__nome", "nome")
         )
+        if selected_ids is None:
+            selected_ids = list(sessao.sessao_exercicios.filter(is_active=True).values_list("exercicio_id", flat=True))
+        self.fields["exercicios"].initial = list(selected_ids)
 
-    def get_exercicios_agrupados(self):
+    def get_exercicios_agrupados(self, exercise_status_map=None):
         queryset = list(self.fields["exercicios"].queryset)
         return [
-            {"categoria": categoria, "exercicios": list(exercicios)}
+            {
+                "categoria": categoria,
+                "exercicios": [
+                    {
+                        "obj": exercicio,
+                        "status": (exercise_status_map or {}).get(exercicio.pk),
+                    }
+                    for exercicio in exercicios
+                ],
+            }
             for categoria, exercicios in groupby(queryset, key=lambda exercicio: exercicio.categoria)
         ]
 
@@ -258,7 +280,16 @@ class CategoriaExercicioForm(forms.ModelForm):
 class ExercicioCatalogoForm(forms.ModelForm):
     class Meta:
         model = ExercicioCatalogo
-        fields = ["nome", "categoria", "descricao", "instrucoes", "observacoes", "ativo"]
+        fields = [
+            "nome",
+            "categoria",
+            "descricao",
+            "instrucoes",
+            "observacoes",
+            "ativo",
+            "max_sessoes_consecutivas",
+            "sessoes_ate_cooldown",
+        ]
         widgets = {
             "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Ponte pélvica"}),
             "categoria": forms.Select(attrs={"class": "form-select"}),
@@ -266,6 +297,8 @@ class ExercicioCatalogoForm(forms.ModelForm):
             "instrucoes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
             "observacoes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "ativo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "max_sessoes_consecutivas": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "sessoes_ate_cooldown": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
         }
         labels = {
             "nome": "Nome",
@@ -274,6 +307,8 @@ class ExercicioCatalogoForm(forms.ModelForm):
             "instrucoes": "Instruções",
             "observacoes": "Observações",
             "ativo": "Disponível para uso",
+            "max_sessoes_consecutivas": "Máximo de sessões consecutivas",
+            "sessoes_ate_cooldown": "Sessões até sair do cooldown",
         }
 
     def __init__(self, *args, **kwargs):

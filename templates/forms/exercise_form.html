@@ -43,6 +43,18 @@
                 {{ form.observacoes }}
                 {% if form.observacoes.errors %}<div class="invalid-feedback d-block">{{ form.observacoes.errors }}</div>{% endif %}
             </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.max_sessoes_consecutivas.id_for_label }}" class="form-label">{{ form.max_sessoes_consecutivas.label }}</label>
+                    {{ form.max_sessoes_consecutivas }}
+                    {% if form.max_sessoes_consecutivas.errors %}<div class="invalid-feedback d-block">{{ form.max_sessoes_consecutivas.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.sessoes_ate_cooldown.id_for_label }}" class="form-label">{{ form.sessoes_ate_cooldown.label }}</label>
+                    {{ form.sessoes_ate_cooldown }}
+                    {% if form.sessoes_ate_cooldown.errors %}<div class="invalid-feedback d-block">{{ form.sessoes_ate_cooldown.errors }}</div>{% endif %}
+                </div>
+            </div>
             <div class="form-check mb-4">
                 {{ form.ativo }}
                 <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
