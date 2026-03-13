@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Categorias de Exercícios{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h1 class="mb-1">Categorias de Exercícios</h1>
+        <p class="text-muted mb-0">Organize o catálogo de exercícios por categorias administrativas.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        {% if perms.forms.add_categoriaexercicio %}
+        <a href="{% url 'exercise-category-create' %}" class="btn btn-success">+ Nova Categoria</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label for="id_q" class="form-label">Buscar</label>
+                <input type="text" name="q" id="id_q" value="{{ search_query }}" class="form-control" placeholder="Nome da categoria">
+            </div>
+            <div class="col-md-4">
+                <label for="id_status" class="form-label">Status</label>
+                <select name="status" id="id_status" class="form-select">
+                    <option value="ativas" {% if status_filter == 'ativas' %}selected{% endif %}>Ativas</option>
+                    <option value="inativas" {% if status_filter == 'inativas' %}selected{% endif %}>Inativas</option>
+                    <option value="todas" {% if status_filter == 'todas' %}selected{% endif %}>Todas</option>
+                </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="{% url 'exercise-category-list' %}" class="btn btn-outline-secondary">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if categorias %}
+<div class="table-responsive">
+    <table class="table table-hover table-striped align-middle">
+        <thead class="table-primary">
+            <tr>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th>Status</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for categoria in categorias %}
+            <tr>
+                <td>{{ categoria.nome }}</td>
+                <td>{{ categoria.descricao|default:"-"|truncatechars:100 }}</td>
+                <td>
+                    {% if categoria.is_active %}
+                    <span class="badge bg-primary">Ativa</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inativa</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="btn-group btn-group-custom" role="group">
+                        {% if perms.forms.change_categoriaexercicio %}
+                        <a href="{% url 'exercise-category-update' categoria.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                        {% endif %}
+                        {% if perms.forms.delete_categoriaexercicio and categoria.is_active %}
+                        <a href="{% url 'exercise-category-delete' categoria.pk %}" class="btn btn-sm btn-danger">Desativar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Paginação">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&q={{ search_query }}&status={{ status_filter }}">Primeira</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&status={{ status_filter }}">Anterior</a></li>
+        {% endif %}
+        <li class="page-item active"><a class="page-link" href="#">{{ page_obj.number }}</a></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&status={{ status_filter }}">Próxima</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ search_query }}&status={{ status_filter }}">Última</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="alert alert-info" role="alert">Nenhuma categoria encontrada para os filtros informados.</div>
+{% endif %}
+{% endblock %}

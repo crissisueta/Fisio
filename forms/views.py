@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
@@ -10,8 +11,27 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
-from .forms import AvaliacaoForm, PacienteForm, ProcedimentoBulkScheduleForm, ProcedimentoForm, SessaoForm
-from .models import Avaliacao, Paciente, Procedimento, Sessao
+from .forms import (
+    AvaliacaoForm,
+    CategoriaExercicioForm,
+    ExercicioCatalogoForm,
+    PacienteForm,
+    ProcedimentoBulkScheduleForm,
+    ProcedimentoExercicioSelectionForm,
+    ProcedimentoForm,
+    SessaoForm,
+    TipoProcedimentoForm,
+)
+from .models import (
+    Avaliacao,
+    CategoriaExercicio,
+    ExercicioCatalogo,
+    Paciente,
+    Procedimento,
+    ProcedimentoExercicio,
+    Sessao,
+    TipoProcedimento,
+)
 from .services.calendar_service import build_calendar_events
 from .services.scheduling_service import (
     create_initial_session_for_procedure,
@@ -25,6 +45,15 @@ def _data_hora_ciente_fuso(value):
     if timezone.is_naive(value):
         return timezone.make_aware(value, timezone.get_current_timezone())
     return value
+
+
+class InternalPermissionMixin(LoginRequiredMixin, PermissionRequiredMixin):
+    raise_exception = True
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(self.request, "Você não possui permissão para acessar esta área.")
+        return super().handle_no_permission()
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -185,7 +214,10 @@ class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
     context_object_name = "procedimento"
 
     def get_queryset(self):
-        return Procedimento.objects.select_related("paciente", "tipo_procedimento").prefetch_related("sessoes")
+        return Procedimento.objects.select_related("paciente", "tipo_procedimento").prefetch_related(
+            "sessoes",
+            "procedimento_exercicios__exercicio__categoria",
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -202,6 +234,18 @@ class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
         context["sessoes_futuras"] = sessoes_futuras
         context["sessoes_passadas"] = sessoes_passadas
         context["sessao_form"] = SessaoForm()
+        context["aba_ativa"] = self.request.GET.get("aba", "sessoes")
+
+        exercicios_vinculados = self.object.procedimento_exercicios.filter(is_active=True).select_related(
+            "exercicio",
+            "exercicio__categoria",
+        )
+        context["exercicios_vinculados"] = exercicios_vinculados
+        if self.object.tipo_procedimento.habilita_exercicios:
+            procedimento_exercicio_form = ProcedimentoExercicioSelectionForm(procedimento=self.object)
+            context["procedimento_exercicio_form"] = procedimento_exercicio_form
+            context["exercicios_agrupados"] = procedimento_exercicio_form.get_exercicios_agrupados()
+            context["exercicios_selecionados_ids"] = set(procedimento_exercicio_form.fields["exercicios"].initial)
         return context
 
 
@@ -388,6 +432,60 @@ def update_status_sessao(request, session_id, status):
 
 
 @login_required
+@require_POST
+def update_procedimento_exercicios(request, pk):
+    procedimento = get_object_or_404(
+        Procedimento.objects.select_related("tipo_procedimento", "paciente"),
+        pk=pk,
+    )
+    if not procedimento.tipo_procedimento.habilita_exercicios:
+        messages.error(request, "Este tipo de procedimento não possui gerenciamento de exercícios habilitado.")
+        return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=sessoes")
+
+    form = ProcedimentoExercicioSelectionForm(request.POST, procedimento=procedimento)
+    if not form.is_valid():
+        messages.error(request, "Não foi possível atualizar os exercícios do procedimento.")
+        return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=exercicios")
+
+    exercicios_selecionados = list(form.cleaned_data["exercicios"])
+    selecionados_ids = {exercicio.pk for exercicio in exercicios_selecionados}
+
+    existentes = {
+        item.exercicio_id: item
+        for item in ProcedimentoExercicio.all_objects.filter(procedimento=procedimento).select_related("exercicio")
+    }
+
+    for ordem, exercicio in enumerate(exercicios_selecionados, start=1):
+        item = existentes.get(exercicio.pk)
+        if item:
+            update_fields = []
+            if not item.is_active:
+                item.is_active = True
+                item.deleted_at = None
+                update_fields.extend(["is_active", "deleted_at"])
+            if item.ordem != ordem:
+                item.ordem = ordem
+                update_fields.append("ordem")
+            if update_fields:
+                if hasattr(item, "updated_at"):
+                    update_fields.append("updated_at")
+                item.save(update_fields=update_fields)
+        else:
+            ProcedimentoExercicio.objects.create(
+                procedimento=procedimento,
+                exercicio=exercicio,
+                ordem=ordem,
+            )
+
+    ids_para_desativar = [item.pk for exercicio_id, item in existentes.items() if exercicio_id not in selecionados_ids and item.is_active]
+    if ids_para_desativar:
+        ProcedimentoExercicio.objects.filter(pk__in=ids_para_desativar).delete()
+
+    messages.success(request, "Lista de exercícios do procedimento atualizada com sucesso.")
+    return redirect(f"{reverse_lazy('procedure-detail', kwargs={'pk': procedimento.pk})}?aba=exercicios")
+
+
+@login_required
 def calendar_events(request):
     events = build_calendar_events()
     return JsonResponse(events, safe=False)
@@ -395,3 +493,203 @@ def calendar_events(request):
 
 class CalendarDashboardView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/calendar.html"
+
+
+class CategoriaExercicioListView(InternalPermissionMixin, ListView):
+    model = CategoriaExercicio
+    template_name = "forms/exercise_category_list.html"
+    context_object_name = "categorias"
+    paginate_by = 15
+    permission_required = "forms.view_categoriaexercicio"
+
+    def get_queryset(self):
+        queryset = CategoriaExercicio.all_objects.order_by("nome")
+        search = self.request.GET.get("q", "").strip()
+        status = self.request.GET.get("status", "ativas")
+
+        if search:
+            queryset = queryset.filter(nome__icontains=search)
+        if status == "ativas":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inativas":
+            queryset = queryset.filter(is_active=False)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["search_query"] = self.request.GET.get("q", "").strip()
+        context["status_filter"] = self.request.GET.get("status", "ativas")
+        return context
+
+
+class CategoriaExercicioCreateView(InternalPermissionMixin, CreateView):
+    model = CategoriaExercicio
+    form_class = CategoriaExercicioForm
+    template_name = "forms/exercise_category_form.html"
+    success_url = reverse_lazy("exercise-category-list")
+    permission_required = "forms.add_categoriaexercicio"
+
+    def form_valid(self, form):
+        messages.success(self.request, "Categoria de exercício cadastrada com sucesso.")
+        return super().form_valid(form)
+
+
+class CategoriaExercicioUpdateView(InternalPermissionMixin, UpdateView):
+    model = CategoriaExercicio
+    form_class = CategoriaExercicioForm
+    template_name = "forms/exercise_category_form.html"
+    success_url = reverse_lazy("exercise-category-list")
+    permission_required = "forms.change_categoriaexercicio"
+    queryset = CategoriaExercicio.all_objects.all()
+
+    def form_valid(self, form):
+        messages.success(self.request, "Categoria de exercício atualizada com sucesso.")
+        return super().form_valid(form)
+
+
+class CategoriaExercicioDeleteView(InternalPermissionMixin, DeleteView):
+    model = CategoriaExercicio
+    template_name = "forms/exercise_category_confirm_delete.html"
+    success_url = reverse_lazy("exercise-category-list")
+    permission_required = "forms.delete_categoriaexercicio"
+    queryset = CategoriaExercicio.all_objects.all()
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "Categoria de exercício desativada com sucesso.")
+        return super().delete(request, *args, **kwargs)
+
+
+class ExercicioCatalogoListView(InternalPermissionMixin, ListView):
+    model = ExercicioCatalogo
+    template_name = "forms/exercise_list.html"
+    context_object_name = "exercicios"
+    paginate_by = 15
+    permission_required = "forms.view_exerciciocatalogo"
+
+    def get_queryset(self):
+        queryset = ExercicioCatalogo.all_objects.select_related("categoria").order_by("nome")
+        search = self.request.GET.get("q", "").strip()
+        categoria_id = self.request.GET.get("categoria", "").strip()
+        status = self.request.GET.get("status", "ativos")
+
+        if search:
+            queryset = queryset.filter(nome__icontains=search)
+        if categoria_id:
+            queryset = queryset.filter(categoria_id=categoria_id)
+        if status == "ativos":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inativos":
+            queryset = queryset.filter(is_active=False)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["search_query"] = self.request.GET.get("q", "").strip()
+        context["selected_category"] = self.request.GET.get("categoria", "").strip()
+        context["status_filter"] = self.request.GET.get("status", "ativos")
+        context["categorias_disponiveis"] = CategoriaExercicio.objects.order_by("nome")
+        return context
+
+
+class ExercicioCatalogoCreateView(InternalPermissionMixin, CreateView):
+    model = ExercicioCatalogo
+    form_class = ExercicioCatalogoForm
+    template_name = "forms/exercise_form.html"
+    success_url = reverse_lazy("exercise-list")
+    permission_required = "forms.add_exerciciocatalogo"
+
+    def form_valid(self, form):
+        messages.success(self.request, "Exercício cadastrado com sucesso.")
+        return super().form_valid(form)
+
+
+class ExercicioCatalogoUpdateView(InternalPermissionMixin, UpdateView):
+    model = ExercicioCatalogo
+    form_class = ExercicioCatalogoForm
+    template_name = "forms/exercise_form.html"
+    success_url = reverse_lazy("exercise-list")
+    permission_required = "forms.change_exerciciocatalogo"
+    queryset = ExercicioCatalogo.all_objects.select_related("categoria")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Exercício atualizado com sucesso.")
+        return super().form_valid(form)
+
+
+class ExercicioCatalogoDeleteView(InternalPermissionMixin, DeleteView):
+    model = ExercicioCatalogo
+    template_name = "forms/exercise_confirm_delete.html"
+    success_url = reverse_lazy("exercise-list")
+    permission_required = "forms.delete_exerciciocatalogo"
+    queryset = ExercicioCatalogo.all_objects.select_related("categoria")
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "Exercício desativado com sucesso.")
+        return super().delete(request, *args, **kwargs)
+
+
+class TipoProcedimentoListView(InternalPermissionMixin, ListView):
+    model = TipoProcedimento
+    template_name = "forms/procedure_type_list.html"
+    context_object_name = "tipos_procedimento"
+    paginate_by = 15
+    permission_required = "forms.view_tipoprocedimento"
+
+    def get_queryset(self):
+        queryset = TipoProcedimento.all_objects.order_by("nome")
+        search = self.request.GET.get("q", "").strip()
+        status = self.request.GET.get("status", "ativos")
+
+        if search:
+            queryset = queryset.filter(nome__icontains=search)
+        if status == "ativos":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inativos":
+            queryset = queryset.filter(is_active=False)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["search_query"] = self.request.GET.get("q", "").strip()
+        context["status_filter"] = self.request.GET.get("status", "ativos")
+        return context
+
+
+class TipoProcedimentoCreateView(InternalPermissionMixin, CreateView):
+    model = TipoProcedimento
+    form_class = TipoProcedimentoForm
+    template_name = "forms/procedure_type_form.html"
+    success_url = reverse_lazy("procedure-type-list")
+    permission_required = "forms.add_tipoprocedimento"
+
+    def form_valid(self, form):
+        messages.success(self.request, "Tipo de procedimento cadastrado com sucesso.")
+        return super().form_valid(form)
+
+
+class TipoProcedimentoUpdateView(InternalPermissionMixin, UpdateView):
+    model = TipoProcedimento
+    form_class = TipoProcedimentoForm
+    template_name = "forms/procedure_type_form.html"
+    success_url = reverse_lazy("procedure-type-list")
+    permission_required = "forms.change_tipoprocedimento"
+    queryset = TipoProcedimento.all_objects.all()
+
+    def form_valid(self, form):
+        messages.success(self.request, "Tipo de procedimento atualizado com sucesso.")
+        return super().form_valid(form)
+
+
+class TipoProcedimentoDeleteView(InternalPermissionMixin, DeleteView):
+    model = TipoProcedimento
+    template_name = "forms/procedure_type_confirm_delete.html"
+    success_url = reverse_lazy("procedure-type-list")
+    permission_required = "forms.delete_tipoprocedimento"
+    queryset = TipoProcedimento.all_objects.all()
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "Tipo de procedimento desativado com sucesso.")
+        return super().delete(request, *args, **kwargs)

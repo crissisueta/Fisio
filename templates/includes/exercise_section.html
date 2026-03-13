@@ -1,0 +1,98 @@
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <h4 class="mb-1">Ficha de Exercícios</h4>
+                <p class="text-muted mb-0">Selecione os exercícios disponíveis para este procedimento.</p>
+            </div>
+            <span class="badge bg-primary">{{ exercicios_vinculados|length }} exercício(s) vinculado(s)</span>
+        </div>
+
+        <form method="post" action="{% url 'procedure-exercise-update' procedimento.pk %}">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="form-label fw-semibold">{{ procedimento_exercicio_form.exercicios.label }}</label>
+                {% if exercicios_agrupados %}
+                {% for grupo in exercicios_agrupados %}
+                <div class="mb-4">
+                    <h6 class="text-uppercase text-muted small mb-2">{{ grupo.categoria.nome }}</h6>
+                    {% if grupo.categoria.descricao %}
+                    <p class="text-muted small mb-3">{{ grupo.categoria.descricao }}</p>
+                    {% endif %}
+                    <div class="row">
+                        {% for exercicio in grupo.exercicios %}
+                        <div class="col-md-6 mb-2">
+                            <label class="form-check border rounded p-3 h-100">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="exercicios"
+                                    value="{{ exercicio.pk }}"
+                                    {% if exercicio.pk in exercicios_selecionados_ids %}checked{% endif %}
+                                >
+                                <span class="ms-2 fw-semibold">{{ exercicio.nome }}</span>
+                                {% if exercicio.descricao %}
+                                <span class="d-block small text-muted mt-2">{{ exercicio.descricao|truncatechars:100 }}</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    Nenhum exercício ativo está cadastrado no admin.
+                </div>
+                {% endif %}
+                {% if procedimento_exercicio_form.exercicios.errors %}
+                <div class="invalid-feedback d-block">{{ procedimento_exercicio_form.exercicios.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary">Salvar exercícios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Exercícios selecionados</h5>
+        {% if exercicios_vinculados %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Ordem</th>
+                        <th>Exercício</th>
+                        <th>Categoria</th>
+                        <th>Status</th>
+                        <th>Instruções</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in exercicios_vinculados %}
+                    <tr>
+                        <td>{{ item.ordem }}</td>
+                        <td>{{ item.exercicio.nome }}</td>
+                        <td>{{ item.exercicio.categoria.nome }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ item.get_status_display }}</span></td>
+                        <td>
+                            {% if item.exercicio.instrucoes %}
+                                {{ item.exercicio.instrucoes|truncatechars:120 }}
+                            {% else %}
+                                <span class="text-muted">Sem instruções cadastradas.</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Nenhum exercício foi selecionado para este procedimento.</p>
+        {% endif %}
+    </div>
+</div>

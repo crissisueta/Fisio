@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Desativar Categoria{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h1 class="h3 mb-3">Desativar Categoria</h1>
+                <p class="mb-2">Confirma desativar a categoria <strong>{{ object.nome }}</strong>?</p>
+                <p class="text-muted mb-4">Ela deixará de aparecer em novos cadastros, mas o histórico será preservado.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, desativar</button>
+                    <a href="{% url 'exercise-category-list' %}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Exercícios{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h1 class="mb-1">Exercícios</h1>
+        <p class="text-muted mb-0">Cadastre e mantenha o catálogo de exercícios usado nos procedimentos.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        {% if perms.forms.add_exerciciocatalogo %}
+        <a href="{% url 'exercise-create' %}" class="btn btn-success">+ Novo Exercício</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="id_q" class="form-label">Buscar</label>
+                <input type="text" name="q" id="id_q" value="{{ search_query }}" class="form-control" placeholder="Nome do exercício">
+            </div>
+            <div class="col-md-4">
+                <label for="id_categoria" class="form-label">Categoria</label>
+                <select name="categoria" id="id_categoria" class="form-select">
+                    <option value="">Todas</option>
+                    {% for categoria in categorias_disponiveis %}
+                    <option value="{{ categoria.pk }}" {% if selected_category == categoria.pk|stringformat:'s' %}selected{% endif %}>{{ categoria.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="id_status" class="form-label">Status</label>
+                <select name="status" id="id_status" class="form-select">
+                    <option value="ativos" {% if status_filter == 'ativos' %}selected{% endif %}>Ativos</option>
+                    <option value="inativos" {% if status_filter == 'inativos' %}selected{% endif %}>Inativos</option>
+                    <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
+                </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="{% url 'exercise-list' %}" class="btn btn-outline-secondary">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if exercicios %}
+<div class="table-responsive">
+    <table class="table table-hover table-striped align-middle">
+        <thead class="table-primary">
+            <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Disponível</th>
+                <th>Status</th>
+                <th>Criado em</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exercicio in exercicios %}
+            <tr>
+                <td>{{ exercicio.nome }}</td>
+                <td>{{ exercicio.categoria.nome }}</td>
+                <td>
+                    {% if exercicio.ativo %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge text-dark" style="background-color:#ffc107;">Não</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if exercicio.is_active %}
+                    <span class="badge bg-primary">Ativo</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inativo</span>
+                    {% endif %}
+                </td>
+                <td>{{ exercicio.created_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <div class="btn-group btn-group-custom" role="group">
+                        {% if perms.forms.change_exerciciocatalogo %}
+                        <a href="{% url 'exercise-update' exercicio.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                        {% endif %}
+                        {% if perms.forms.delete_exerciciocatalogo and exercicio.is_active %}
+                        <a href="{% url 'exercise-delete' exercicio.pk %}" class="btn btn-sm btn-danger">Desativar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Paginação">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&q={{ search_query }}&categoria={{ selected_category }}&status={{ status_filter }}">Primeira</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&categoria={{ selected_category }}&status={{ status_filter }}">Anterior</a></li>
+        {% endif %}
+        <li class="page-item active"><a class="page-link" href="#">{{ page_obj.number }}</a></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&categoria={{ selected_category }}&status={{ status_filter }}">Próxima</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ search_query }}&categoria={{ selected_category }}&status={{ status_filter }}">Última</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="alert alert-info" role="alert">Nenhum exercício encontrado para os filtros informados.</div>
+{% endif %}
+{% endblock %}

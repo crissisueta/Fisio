@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Tipos de Procedimento{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h1 class="mb-1">Tipos de Procedimento</h1>
+        <p class="text-muted mb-0">Gerencie os tipos disponíveis para criar procedimentos terapêuticos.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        {% if perms.forms.add_tipoprocedimento %}
+        <a href="{% url 'procedure-type-create' %}" class="btn btn-success">+ Novo Tipo</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label for="id_q" class="form-label">Buscar</label>
+                <input type="text" name="q" id="id_q" value="{{ search_query }}" class="form-control" placeholder="Nome do tipo">
+            </div>
+            <div class="col-md-4">
+                <label for="id_status" class="form-label">Status</label>
+                <select name="status" id="id_status" class="form-select">
+                    <option value="ativos" {% if status_filter == 'ativos' %}selected{% endif %}>Ativos</option>
+                    <option value="inativos" {% if status_filter == 'inativos' %}selected{% endif %}>Inativos</option>
+                    <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
+                </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="{% url 'procedure-type-list' %}" class="btn btn-outline-secondary">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if tipos_procedimento %}
+<div class="table-responsive">
+    <table class="table table-hover table-striped align-middle">
+        <thead class="table-primary">
+            <tr>
+                <th>Nome</th>
+                <th>Gerencia exercícios</th>
+                <th>Status</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tipo in tipos_procedimento %}
+            <tr>
+                <td>{{ tipo.nome }}</td>
+                <td>
+                    {% if tipo.habilita_exercicios %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Não</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if tipo.is_active %}
+                    <span class="badge bg-primary">Ativo</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inativo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="btn-group btn-group-custom" role="group">
+                        {% if perms.forms.change_tipoprocedimento %}
+                        <a href="{% url 'procedure-type-update' tipo.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                        {% endif %}
+                        {% if perms.forms.delete_tipoprocedimento and tipo.is_active %}
+                        <a href="{% url 'procedure-type-delete' tipo.pk %}" class="btn btn-sm btn-danger">Desativar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Paginação">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&q={{ search_query }}&status={{ status_filter }}">Primeira</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&status={{ status_filter }}">Anterior</a></li>
+        {% endif %}
+        <li class="page-item active"><a class="page-link" href="#">{{ page_obj.number }}</a></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&status={{ status_filter }}">Próxima</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ search_query }}&status={{ status_filter }}">Última</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="alert alert-info" role="alert">Nenhum tipo de procedimento encontrado para os filtros informados.</div>
+{% endif %}
+{% endblock %}

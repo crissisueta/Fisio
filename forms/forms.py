@@ -1,9 +1,11 @@
 from datetime import datetime
+from itertools import groupby
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
-from .models import Avaliacao, Paciente, Procedimento, Sessao
+from .models import Avaliacao, CategoriaExercicio, ExercicioCatalogo, Paciente, Procedimento, Sessao, TipoProcedimento
 from .services.scheduling_service import WEEKDAY_CHOICES
 
 
@@ -209,3 +211,94 @@ class ProcedimentoBulkScheduleForm(forms.Form):
             self.add_error("hora_final", "O horário final deve ser maior que o horário inicial.")
 
         return cleaned_data
+
+
+class ProcedimentoExercicioSelectionForm(forms.Form):
+    exercicios = forms.ModelMultipleChoiceField(
+        queryset=ExercicioCatalogo.objects.filter(ativo=True).order_by("nome"),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Exercícios disponíveis",
+    )
+
+    def __init__(self, *args, **kwargs):
+        procedimento = kwargs.pop("procedimento")
+        super().__init__(*args, **kwargs)
+        self.procedimento = procedimento
+        self.fields["exercicios"].queryset = ExercicioCatalogo.objects.filter(
+            is_active=True,
+            ativo=True,
+        ).select_related("categoria").order_by("categoria__nome", "nome")
+        self.fields["exercicios"].initial = list(
+            procedimento.procedimento_exercicios.filter(is_active=True).values_list("exercicio_id", flat=True)
+        )
+
+    def get_exercicios_agrupados(self):
+        queryset = list(self.fields["exercicios"].queryset)
+        return [
+            {"categoria": categoria, "exercicios": list(exercicios)}
+            for categoria, exercicios in groupby(queryset, key=lambda exercicio: exercicio.categoria)
+        ]
+
+
+class CategoriaExercicioForm(forms.ModelForm):
+    class Meta:
+        model = CategoriaExercicio
+        fields = ["nome", "descricao"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Alongamento"}),
+            "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        }
+        labels = {
+            "nome": "Nome",
+            "descricao": "Descrição",
+        }
+
+
+class ExercicioCatalogoForm(forms.ModelForm):
+    class Meta:
+        model = ExercicioCatalogo
+        fields = ["nome", "categoria", "descricao", "instrucoes", "observacoes", "ativo"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Ponte pélvica"}),
+            "categoria": forms.Select(attrs={"class": "form-select"}),
+            "descricao": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "instrucoes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "observacoes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "ativo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+        labels = {
+            "nome": "Nome",
+            "categoria": "Categoria",
+            "descricao": "Descrição",
+            "instrucoes": "Instruções",
+            "observacoes": "Observações",
+            "ativo": "Disponível para uso",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = CategoriaExercicio.objects.order_by("nome")
+        instance = getattr(self, "instance", None)
+        categoria_atual_id = getattr(instance, "categoria_id", None)
+
+        if categoria_atual_id:
+            queryset = CategoriaExercicio.all_objects.filter(Q(is_active=True) | Q(pk=categoria_atual_id)).order_by(
+                "nome"
+            )
+
+        self.fields["categoria"].queryset = queryset
+
+
+class TipoProcedimentoForm(forms.ModelForm):
+    class Meta:
+        model = TipoProcedimento
+        fields = ["nome", "habilita_exercicios"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex.: Pilates"}),
+            "habilita_exercicios": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+        labels = {
+            "nome": "Nome",
+            "habilita_exercicios": "Habilita gerenciamento de exercícios",
+        }

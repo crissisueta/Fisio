@@ -163,6 +163,7 @@ class Avaliacao(SoftDeleteModel, TimestampedModel):
 class TipoProcedimento(SoftDeleteModel, models.Model):
     """Tipos de procedimento terapêutico."""
     nome = models.CharField(max_length=100, unique=True)
+    habilita_exercicios = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Tipo de Procedimento"
@@ -254,3 +255,89 @@ class FichaExercicios(SoftDeleteModel, TimestampedModel):
 
     def __str__(self):
         return f"{self.titulo} - {self.paciente.nome}"
+
+
+class CategoriaExercicio(SoftDeleteModel, models.Model):
+    """Categorias administrativas para organizar exercícios."""
+
+    nome = models.CharField(max_length=100, unique=True)
+    descricao = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Categoria de Exercício"
+        verbose_name_plural = "Categorias de Exercícios"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class ExercicioCatalogo(SoftDeleteModel, TimestampedModel):
+    """Catálogo administrativo de exercícios disponíveis para procedimentos."""
+    ACTIVE_RELATED_FILTERS = {
+        "categoria__is_active": True,
+    }
+
+    nome = models.CharField(max_length=150, unique=True)
+    categoria = models.ForeignKey(
+        CategoriaExercicio,
+        on_delete=models.PROTECT,
+        related_name="exercicios",
+    )
+    descricao = models.TextField(blank=True)
+    instrucoes = models.TextField(blank=True)
+    observacoes = models.TextField(blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Exercício"
+        verbose_name_plural = "Exercícios"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class ProcedimentoExercicio(SoftDeleteModel, TimestampedModel):
+    """Vínculo entre procedimento do paciente e exercício selecionado."""
+    ACTIVE_RELATED_FILTERS = {
+        "procedimento__is_active": True,
+        "procedimento__paciente__is_active": True,
+        "procedimento__tipo_procedimento__is_active": True,
+        "exercicio__is_active": True,
+        "exercicio__categoria__is_active": True,
+    }
+
+    STATUS_PLANEJADO = "planejado"
+    STATUS_EM_ANDAMENTO = "em_andamento"
+    STATUS_CONCLUIDO = "concluido"
+    STATUS_CHOICES = [
+        (STATUS_PLANEJADO, "Planejado"),
+        (STATUS_EM_ANDAMENTO, "Em andamento"),
+        (STATUS_CONCLUIDO, "Concluído"),
+    ]
+
+    procedimento = models.ForeignKey(Procedimento, on_delete=models.CASCADE, related_name="procedimento_exercicios")
+    exercicio = models.ForeignKey(ExercicioCatalogo, on_delete=models.PROTECT, related_name="procedimento_exercicios")
+    ordem = models.PositiveIntegerField(default=0)
+    series = models.CharField(max_length=50, blank=True)
+    repeticoes = models.CharField(max_length=50, blank=True)
+    frequencia = models.CharField(max_length=100, blank=True)
+    progressao = models.TextField(blank=True)
+    observacoes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PLANEJADO)
+
+    class Meta:
+        verbose_name = "Exercício do Procedimento"
+        verbose_name_plural = "Exercícios do Procedimento"
+        ordering = ["ordem", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["procedimento", "exercicio"],
+                condition=models.Q(is_active=True),
+                name="unique_active_exercicio_por_procedimento",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.procedimento} - {self.exercicio}"

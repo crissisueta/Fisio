@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from .models import Avaliacao, FichaExercicios, Paciente, Procedimento, Sessao, TipoAvaliacao, TipoProcedimento
+from .models import (
+    Avaliacao,
+    CategoriaExercicio,
+    ExercicioCatalogo,
+    FichaExercicios,
+    Paciente,
+    Procedimento,
+    ProcedimentoExercicio,
+    Sessao,
+    TipoAvaliacao,
+    TipoProcedimento,
+)
 
 
 class SoftDeleteAdminMixin:
@@ -50,9 +61,9 @@ class AvaliacaoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(TipoProcedimento)
 class TipoProcedimentoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ("nome", "is_active")
+    list_display = ("nome", "habilita_exercicios", "is_active")
     search_fields = ("nome",)
-    list_filter = ("is_active",)
+    list_filter = ("is_active", "habilita_exercicios")
 
 
 class SessaoInline(admin.TabularInline):
@@ -63,12 +74,22 @@ class SessaoInline(admin.TabularInline):
         return self.model.all_objects.get_queryset()
 
 
+class ProcedimentoExercicioInline(admin.TabularInline):
+    model = ProcedimentoExercicio
+    extra = 0
+    autocomplete_fields = ("exercicio",)
+    fields = ("exercicio", "ordem", "series", "repeticoes", "frequencia", "status", "observacoes", "is_active")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.get_queryset().select_related("exercicio")
+
+
 @admin.register(Procedimento)
 class ProcedimentoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ("paciente", "tipo_procedimento", "concluido", "is_active", "created_at")
     list_filter = ("is_active", "tipo_procedimento", "concluido", "created_at")
     search_fields = ("paciente__nome", "tipo_procedimento__nome")
-    inlines = [SessaoInline]
+    inlines = [SessaoInline, ProcedimentoExercicioInline]
 
 
 @admin.register(Sessao)
@@ -83,3 +104,31 @@ class FichaExerciciosAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ("titulo", "paciente", "procedimento", "ativo", "is_active", "created_at")
     list_filter = ("is_active", "ativo", "created_at")
     search_fields = ("titulo", "paciente__nome", "observacoes")
+
+
+@admin.register(CategoriaExercicio)
+class CategoriaExercicioAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("nome", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("nome", "descricao")
+
+
+@admin.register(ExercicioCatalogo)
+class ExercicioCatalogoAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("nome", "categoria", "ativo", "is_active", "created_at")
+    list_filter = ("is_active", "ativo", "categoria", "created_at")
+    search_fields = ("nome", "categoria__nome", "descricao", "instrucoes", "observacoes")
+    autocomplete_fields = ("categoria",)
+
+
+@admin.register(ProcedimentoExercicio)
+class ProcedimentoExercicioAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ("procedimento", "exercicio", "status", "ordem", "is_active", "created_at")
+    list_filter = ("is_active", "status", "created_at")
+    search_fields = (
+        "procedimento__paciente__nome",
+        "procedimento__tipo_procedimento__nome",
+        "exercicio__nome",
+        "observacoes",
+    )
+    autocomplete_fields = ("procedimento", "exercicio")

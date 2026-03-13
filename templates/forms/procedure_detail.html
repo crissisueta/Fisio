@@ -8,6 +8,7 @@
     .summary-item .label { font-size: 0.8rem; color: #6c757d; display: block; }
     .timeline-col { border-left: 3px solid #dee2e6; padding-left: 16px; }
     .sessao-card.proxima-sessao { border: 2px solid #0d6efd; box-shadow: 0 0.3rem 0.8rem rgba(13, 110, 253, 0.15); }
+    .procedure-tab-content { margin-top: 1.5rem; }
 </style>
 {% endblock %}
 
@@ -56,5 +57,32 @@
     </div>
 </div>
 
-{% include 'includes/followup_section.html' %}
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <a
+            class="nav-link {% if aba_ativa != 'exercicios' %}active{% endif %}"
+            href="{% url 'procedure-detail' procedimento.pk %}?aba=sessoes"
+        >
+            Sessões
+        </a>
+    </li>
+    {% if procedimento.tipo_procedimento.habilita_exercicios %}
+    <li class="nav-item">
+        <a
+            class="nav-link {% if aba_ativa == 'exercicios' %}active{% endif %}"
+            href="{% url 'procedure-detail' procedimento.pk %}?aba=exercicios"
+        >
+            Exercícios
+        </a>
+    </li>
+    {% endif %}
+</ul>
+
+<div class="procedure-tab-content">
+    {% if aba_ativa == 'exercicios' and procedimento.tipo_procedimento.habilita_exercicios %}
+        {% include 'includes/exercise_section.html' %}
+    {% else %}
+        {% include 'includes/followup_section.html' %}
+    {% endif %}
+</div>
 {% endblock %}

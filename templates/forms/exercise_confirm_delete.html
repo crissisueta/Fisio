@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Desativar Exercício{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h1 class="h3 mb-3">Desativar Exercício</h1>
+                <p class="mb-2">Confirma desativar o exercício <strong>{{ object.nome }}</strong>?</p>
+                <p class="text-muted mb-4">O registro será mantido no banco e deixará de aparecer como ativo no sistema.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, desativar</button>
+                    <a href="{% url 'exercise-list' %}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
