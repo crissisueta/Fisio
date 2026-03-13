@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class TimestampedModel(models.Model):
@@ -10,7 +11,90 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
-class Paciente(TimestampedModel):
+class SoftDeleteQuerySet(models.QuerySet):
+    """QuerySet com suporte a soft delete em lote."""
+
+    def active(self):
+        return self.filter(is_active=True)
+
+    def inactive(self):
+        return self.filter(is_active=False)
+
+    def delete(self):
+        return self.soft_delete()
+
+    def soft_delete(self):
+        timestamp = timezone.now()
+        updated = self.filter(is_active=True).update(is_active=False, deleted_at=timestamp)
+        return updated, {self.model._meta.label: updated}
+
+    def hard_delete(self):
+        return super().delete()
+
+
+class ActiveManager(models.Manager):
+    """Manager padrão que expõe somente registros ativos."""
+
+    def get_queryset(self):
+        queryset = SoftDeleteQuerySet(self.model, using=self._db).active()
+        related_filters = getattr(self.model, "ACTIVE_RELATED_FILTERS", {})
+        if related_filters:
+            queryset = queryset.filter(**related_filters)
+        return queryset
+
+
+class AllObjectsManager(models.Manager):
+    """Manager para acesso administrativo/debug a todos os registros."""
+
+    def get_queryset(self):
+        return SoftDeleteQuerySet(self.model, using=self._db)
+
+
+class SoftDeleteModel(models.Model):
+    """Modelo base abstrato com desativação lógica."""
+
+    is_active = models.BooleanField(default=True, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    objects = ActiveManager()
+    all_objects = AllObjectsManager()
+
+    class Meta:
+        abstract = True
+        base_manager_name = "all_objects"
+        default_manager_name = "objects"
+
+    def delete(self, using=None, keep_parents=False):
+        if not self.is_active:
+            return 0, {}
+
+        self.is_active = False
+        self.deleted_at = timezone.now()
+        update_fields = ["is_active", "deleted_at"]
+
+        if hasattr(self, "updated_at"):
+            self.updated_at = self.deleted_at
+            update_fields.append("updated_at")
+
+        self.save(update_fields=update_fields)
+        return 1, {self._meta.label: 1}
+
+    def hard_delete(self, using=None, keep_parents=False):
+        return super().delete(using=using, keep_parents=keep_parents)
+
+    def restore(self):
+        self.is_active = True
+        self.deleted_at = None
+        update_fields = ["is_active", "deleted_at"]
+
+        if hasattr(self, "updated_at"):
+            self.updated_at = timezone.now()
+            update_fields.append("updated_at")
+
+        self.save(update_fields=update_fields)
+
+
+class Paciente(SoftDeleteModel, TimestampedModel):
     """Cadastro de paciente."""
     nome = models.CharField(max_length=200)
     cpf = models.CharField(max_length=14, unique=True)
@@ -41,7 +125,7 @@ class Paciente(TimestampedModel):
         return f"{self.nome} - {self.cpf}"
 
 
-class TipoAvaliacao(models.Model):
+class TipoAvaliacao(SoftDeleteModel, models.Model):
     """Tipos de avaliação clínica."""
     nome = models.CharField(max_length=100, unique=True)
 
@@ -54,8 +138,13 @@ class TipoAvaliacao(models.Model):
         return self.nome
 
 
-class Avaliacao(TimestampedModel):
+class Avaliacao(SoftDeleteModel, TimestampedModel):
     """Avaliações não recorrentes do paciente."""
+    ACTIVE_RELATED_FILTERS = {
+        "paciente__is_active": True,
+        "tipo_avaliacao__is_active": True,
+    }
+
     paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name="avaliacoes")
     tipo_avaliacao = models.ForeignKey(TipoAvaliacao, on_delete=models.PROTECT, related_name="avaliacoes")
     data_hora = models.DateTimeField()
@@ -71,7 +160,7 @@ class Avaliacao(TimestampedModel):
         return f"{self.tipo_avaliacao} - {self.paciente}"
 
 
-class TipoProcedimento(models.Model):
+class TipoProcedimento(SoftDeleteModel, models.Model):
     """Tipos de procedimento terapêutico."""
     nome = models.CharField(max_length=100, unique=True)
 
@@ -84,8 +173,13 @@ class TipoProcedimento(models.Model):
         return self.nome
 
 
-class Procedimento(TimestampedModel):
+class Procedimento(SoftDeleteModel, TimestampedModel):
     """Plano de tratamento de um paciente."""
+    ACTIVE_RELATED_FILTERS = {
+        "paciente__is_active": True,
+        "tipo_procedimento__is_active": True,
+    }
+
     paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name="procedimentos")
     tipo_procedimento = models.ForeignKey(TipoProcedimento, on_delete=models.PROTECT, related_name="procedimentos")
     observacoes = models.TextField(blank=True)
@@ -100,8 +194,13 @@ class Procedimento(TimestampedModel):
         return f"{self.tipo_procedimento} - {self.paciente}"
 
 
-class Sessao(TimestampedModel):
+class Sessao(SoftDeleteModel, TimestampedModel):
     """Sessão/atendimento vinculado a um procedimento."""
+    ACTIVE_RELATED_FILTERS = {
+        "procedimento__is_active": True,
+        "procedimento__paciente__is_active": True,
+        "procedimento__tipo_procedimento__is_active": True,
+    }
 
     STATUS_AGENDADA = "agendada"
     STATUS_REALIZADA = "realizada"
@@ -130,8 +229,12 @@ class Sessao(TimestampedModel):
         return f"{self.procedimento} - {self.data_hora}"
 
 
-class FichaExercicios(TimestampedModel):
+class FichaExercicios(SoftDeleteModel, TimestampedModel):
     """Estrutura base para ficha de exercícios (evolução futura)."""
+    ACTIVE_RELATED_FILTERS = {
+        "paciente__is_active": True,
+    }
+
     paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name="fichas_exercicios")
     procedimento = models.ForeignKey(
         Procedimento,
