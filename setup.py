@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-Setup script for Django Fisioterapia application
-Installs dependencies and initializes the database
+Setup script for Django Fisioterapia application.
+Installs dependencies and runs migrations against MongoDB (e.g. Azure Cosmos DB for MongoDB).
+Requires MONGODB_URI and MONGODB_NAME in the environment, or a local MongoDB on 127.0.0.1:27017.
 """
 
 import os

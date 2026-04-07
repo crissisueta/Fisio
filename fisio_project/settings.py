@@ -24,23 +24,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
 
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-dev-only-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG") == "True"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
+    'fisio_project.mongo_contrib.MongoContentTypesConfig',
+    'fisio_project.mongo_contrib.MongoAuthConfig',
+    'fisio_project.mongo_contrib.MongoSessionsConfig',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'fisio_project.mongo_contrib.MongoAdminConfig',
     'forms',
 ]
 
@@ -76,12 +76,37 @@ TEMPLATES = [
 WSGI_APPLICATION = 'fisio_project.wsgi.application'
 
 
-# Database
+# Database — Azure Cosmos DB for MongoDB (MongoDB wire protocol), not PostgreSQL or Core (SQL) API.
+# Use the connection string from Azure Portal → Cosmos account → Keys (often includes ssl=true; Cosmos may require retryWrites=false).
+# Set MONGODB_URI to the full URI and MONGODB_NAME to the database name (e.g. fisio).
+#
+# DJANGO_MIGRATIONS_DUMMY_DB=1 uses the dummy backend so `makemigrations` works without MongoDB.
 
-import dj_database_url
+if os.environ.get("DJANGO_MIGRATIONS_DUMMY_DB") == "1":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.dummy",
+        }
+    }
+    DATABASE_ROUTERS = []
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django_mongodb_backend",
+            "HOST": os.environ.get(
+                "MONGODB_URI",
+                "mongodb://127.0.0.1:27017/?directConnection=true",
+            ),
+            "NAME": os.environ.get("MONGODB_NAME", "fisio"),
+        }
+    }
+    DATABASE_ROUTERS = ["django_mongodb_backend.routers.MongoRouter"]
 
-DATABASES = {
-    'default': dj_database_url.config(default=os.environ.get("DATABASE_URL"))
+MIGRATION_MODULES = {
+    "admin": "mongo_migrations.admin",
+    "auth": "mongo_migrations.auth",
+    "contenttypes": "mongo_migrations.contenttypes",
+    "sessions": "mongo_migrations.sessions",
 }
 
 # Password validation
@@ -124,7 +149,7 @@ STATICFILES_DIRS = []
 
 # Default primary key field type
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
 
 # Authentication redirects
 LOGIN_URL = 'login'

@@ -1,0 +1,22 @@
+"""Django contrib app configs for django-mongodb-backend (ObjectId primary keys)."""
+
+from django.contrib.admin.apps import AdminConfig
+from django.contrib.auth.apps import AuthConfig
+from django.contrib.contenttypes.apps import ContentTypesConfig
+from django.contrib.sessions.apps import SessionsConfig
+
+
+class MongoAdminConfig(AdminConfig):
+    default_auto_field = "django_mongodb_backend.fields.ObjectIdAutoField"
+
+
+class MongoAuthConfig(AuthConfig):
+    default_auto_field = "django_mongodb_backend.fields.ObjectIdAutoField"
+
+
+class MongoContentTypesConfig(ContentTypesConfig):
+    default_auto_field = "django_mongodb_backend.fields.ObjectIdAutoField"
+
+
+class MongoSessionsConfig(SessionsConfig):
+    default_auto_field = "django_mongodb_backend.fields.ObjectIdAutoField"
