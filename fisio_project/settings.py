@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
 
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG") == "True"
@@ -80,9 +80,14 @@ WSGI_APPLICATION = 'fisio_project.wsgi.application'
 
 import dj_database_url
 
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+
+# Railway Postgres requires SSL in production; SQLite should not use SSL.
 DATABASES = {
-    'default': dj_database_url.config(
-        default='sqlite:///db.sqlite3'
+    'default': dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=600,
+        ssl_require=not DATABASE_URL.startswith("sqlite"),
     )
 }
 
@@ -122,7 +127,7 @@ EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # Default primary key field type
 
