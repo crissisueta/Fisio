@@ -4,8 +4,9 @@
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-9"><h1>Procedimentos</h1></div>
-    <div class="col-md-3 text-end"><a href="{% url 'procedure-create' %}" class="btn btn-success">+ Novo Procedimento</a></div>
+    <div class="col-md-12">
+        <h1>Procedimentos</h1>
+    </div>
 </div>
 
 {% if procedimentos %}
@@ -49,6 +50,6 @@
 </nav>
 {% endif %}
 {% else %}
-<div class="alert alert-info" role="alert">Nenhum procedimento encontrado. <a href="{% url 'procedure-create' %}">Criar procedimento</a>.</div>
+<div class="alert alert-info" role="alert">Nenhum procedimento encontrado. Use o formulário abaixo do calendário para cadastrar o primeiro.</div>
 {% endif %}
 {% endblock %}

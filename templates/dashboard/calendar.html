@@ -36,6 +36,13 @@
         </div>
     </div>
 </div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        {% url 'calendar-dashboard' as calendar_dashboard_url %}
+        {% include 'includes/procedure_form_card.html' with form=procedure_form title='Novo Procedimento' description='Crie um procedimento diretamente a partir da agenda, sem sair do calendário.' form_action=calendar_dashboard_url cancel_url=calendar_dashboard_url submit_label='Criar procedimento' %}
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

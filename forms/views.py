@@ -259,18 +259,13 @@ class ProcedimentoDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
-    model = Procedimento
-    form_class = ProcedimentoForm
-    template_name = "forms/procedure_form.html"
-    success_url = reverse_lazy("procedure-list")
-
+class ProcedureCreateFlowMixin:
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["enable_schedule_fields"] = True
         return kwargs
 
-    def form_valid(self, form):
+    def handle_valid_procedure_form(self, form):
         try:
             with transaction.atomic():
                 self.object = form.save()
@@ -284,7 +279,7 @@ class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
                     )
         except ValidationError as exc:
             form.add_error("hora_sessao_inicial", exc.message)
-            return self.form_invalid(form)
+            return None
 
         if form.cleaned_data["modo_agendamento"] == ProcedimentoForm.MODO_AGENDAMENTO_UNICO:
             messages.success(self.request, "Procedimento criado com sucesso com a primeira sessão agendada.")
@@ -292,6 +287,19 @@ class ProcedimentoCreateView(LoginRequiredMixin, CreateView):
 
         messages.success(self.request, "Procedimento criado com sucesso. Agora preencha o período das sessões.")
         return redirect("procedure-bulk-schedule", pk=self.object.pk)
+
+
+class ProcedimentoCreateView(ProcedureCreateFlowMixin, LoginRequiredMixin, CreateView):
+    model = Procedimento
+    form_class = ProcedimentoForm
+    template_name = "forms/procedure_form.html"
+    success_url = reverse_lazy("procedure-list")
+
+    def form_valid(self, form):
+        response = self.handle_valid_procedure_form(form)
+        if response is None:
+            return self.form_invalid(form)
+        return response
 
 
 class ProcedimentoUpdateView(LoginRequiredMixin, UpdateView):
@@ -524,8 +532,36 @@ def calendar_events(request):
     return JsonResponse(events, safe=False)
 
 
-class CalendarDashboardView(LoginRequiredMixin, TemplateView):
+class CalendarDashboardView(ProcedureCreateFlowMixin, LoginRequiredMixin, TemplateView):
     template_name = "dashboard/calendar.html"
+
+    def get_form(self, data=None):
+        return ProcedimentoForm(
+            data=data,
+            enable_schedule_fields=True,
+            initial=self.get_procedure_initial(),
+        )
+
+    def get_procedure_initial(self):
+        initial = {}
+        selected_date = self.request.GET.get("date", "").strip()
+        if selected_date:
+            initial["data_sessao_inicial"] = selected_date
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["procedure_form"] = kwargs.get("procedure_form") or self.get_form()
+        context["selected_calendar_date"] = self.request.GET.get("date", "").strip()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = self.get_form(data=request.POST)
+        if form.is_valid():
+            response = self.handle_valid_procedure_form(form)
+            if response is not None:
+                return response
+        return self.render_to_response(self.get_context_data(procedure_form=form))
 
 
 class CategoriaExercicioListView(InternalPermissionMixin, ListView):
