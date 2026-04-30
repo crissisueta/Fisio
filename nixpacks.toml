@@ -1,0 +1,2 @@
+[start]
+cmd = "python manage.py migrate --noinput && python manage.py create_superuser && gunicorn fisio_project.wsgi:application --bind 0.0.0.0:$PORT"
