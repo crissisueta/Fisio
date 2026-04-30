@@ -1,0 +1,28 @@
+{% url 'calendar-dashboard' as calendar_dashboard_url %}
+
+<div class="accordion" id="calendarProcedureAccordion">
+    <div class="accordion-item border-0 shadow-sm">
+        <h2 class="accordion-header" id="headingCalendarProcedureForm">
+            <button
+                class="accordion-button {% if not procedure_form.errors %}collapsed{% endif %}"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseCalendarProcedureForm"
+                aria-expanded="{% if procedure_form.errors %}true{% else %}false{% endif %}"
+                aria-controls="collapseCalendarProcedureForm"
+            >
+                Add Section
+            </button>
+        </h2>
+        <div
+            id="collapseCalendarProcedureForm"
+            class="accordion-collapse collapse {% if procedure_form.errors %}show{% endif %}"
+            aria-labelledby="headingCalendarProcedureForm"
+            data-bs-parent="#calendarProcedureAccordion"
+        >
+            <div class="accordion-body bg-light">
+                {% include 'includes/procedure_form_card.html' with form=procedure_form title='Novo Procedimento' description='Crie um procedimento diretamente a partir da agenda, sem sair do calendário.' form_action=calendar_dashboard_url cancel_url=calendar_dashboard_url submit_label='Criar procedimento' %}
+            </div>
+        </div>
+    </div>
+</div>
