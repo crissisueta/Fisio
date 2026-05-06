@@ -1,0 +1,2 @@
+"""Paciente domain package."""
+

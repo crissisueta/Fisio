@@ -1,94 +1,84 @@
 # Estrutura do Projeto
 
+## Estratégia atual
+
+O projeto ainda mantém o app Django instalado como `forms` para preservar app label,
+migrations, permissões e tabelas existentes. A organização interna, porém, foi
+separada por domínio para reduzir acoplamento e facilitar uma futura migração para
+apps Django independentes.
+
+Os módulos legados `forms.models`, `forms.forms`, `forms.views` e `forms.services.*`
+continuam existindo como camadas de compatibilidade.
+
 ## Árvore principal
 
 ```text
 Fisio/
 ├── fisio_project/
+│   ├── settings.py
+│   └── urls.py
 ├── forms/
-│   ├── models.py
-│   ├── forms.py
-│   ├── views.py
-│   ├── urls.py
+│   ├── core/
+│   │   ├── admin.py
+│   │   ├── mixins.py
+│   │   ├── models.py
+│   │   └── utils/datetime.py
+│   ├── painel/
+│   │   ├── selectors.py
+│   │   ├── urls.py
+│   │   └── views.py
+│   ├── pacientes/
+│   │   ├── admin.py
+│   │   ├── forms.py
+│   │   ├── models.py
+│   │   ├── selectors.py
+│   │   ├── urls.py
+│   │   └── views.py
+│   ├── avaliacoes/
+│   │   ├── admin.py
+│   │   ├── forms.py
+│   │   ├── models.py
+│   │   ├── selectors.py
+│   │   ├── urls.py
+│   │   └── views.py
+│   ├── procedimentos/
+│   │   ├── admin.py
+│   │   ├── forms.py
+│   │   ├── models.py
+│   │   ├── presenters/calendar.py
+│   │   ├── selectors.py
+│   │   ├── services/
+│   │   ├── urls.py
+│   │   └── views/
+│   ├── exercicios/
+│   │   ├── admin.py
+│   │   ├── forms.py
+│   │   ├── models.py
+│   │   ├── selectors.py
+│   │   ├── services/
+│   │   ├── urls.py
+│   │   └── views.py
+│   ├── migrations/
 │   ├── admin.py
-│   ├── services/calendar_service.py
-│   └── migrations/
+│   ├── forms.py
+│   ├── models.py
+│   ├── urls.py
+│   └── views.py
 └── templates/
-    ├── base.html
-    ├── index.html
-    ├── dashboard/calendar.html
-    ├── includes/followup_section.html
-    └── forms/
-        ├── inscricao_*.html
-        ├── avaliacao_*.html
-        └── procedure_*.html
 ```
 
-## Modelos atuais
+## Papéis dos módulos
 
-### `Paciente`
-Dados cadastrais e clínicos básicos do paciente.
+- `models.py`: entidades e propriedades simples.
+- `forms.py`: validação e widgets de entrada HTTP.
+- `selectors.py`: consultas e composição de querysets.
+- `services/`: regras de escrita e fluxos transacionais.
+- `presenters/`: dados prontos para UI ou JSON sem acoplar views grandes.
+- `views.py` / `views/`: autenticação, request/response, mensagens e redirects.
+- `core/`: infraestrutura compartilhada, como soft delete, timestamps, mixins e utilitários.
 
-### `TipoAvaliacao`
-Catálogo de tipos de avaliação.
+## Compatibilidade
 
-### `Avaliacao`
-Registro de avaliação não recorrente.
-
-Campos principais:
-- `paciente`
-- `tipo_avaliacao`
-- `data_hora`
-- `concluida`
-- `observacoes`
-
-### `TipoProcedimento`
-Catálogo de tipos de procedimento terapêutico.
-
-### `Procedimento`
-Plano terapêutico do paciente.
-
-Campos principais:
-- `paciente`
-- `tipo_procedimento`
-- `concluido`
-- `observacoes`
-
-### `Sessao`
-Atendimento/sessão vinculada ao procedimento.
-
-Campos principais:
-- `procedimento`
-- `data_hora`
-- `numero`
-- `status` (`agendada`, `realizada`, `faltou`, `cancelada`)
-- `assinatura_confirmada`
-- `observacoes`
-
-### `FichaExercicios` (base para evolução futura)
-Estrutura inicial para planejamento de exercícios, sem lógica avançada nesta etapa.
-
-Campos principais:
-- `paciente`
-- `procedimento` (opcional)
-- `titulo`
-- `observacoes`
-- `ativo`
-
-## URLs do app (`forms/urls.py`)
-
-- Pacientes: `/forms/inscricao/...`
-- Avaliações: `/forms/avaliacoes/...`
-- Procedimentos: `/forms/procedimentos/...`
-- Sessões: `/forms/sessoes/...`
-- Calendário: `/forms/calendario/` e `/forms/calendario/eventos/`
-
-## Calendário
-
-`forms/services/calendar_service.py` consulta somente `Sessao`.
-
-Cada evento contém:
-- paciente + tipo de procedimento
-- data/hora da sessão
-- cor do evento pelo tipo de procedimento
-- ponto visual indicando se o procedimento está concluído
+As URLs, nomes de rotas, templates, permissões `forms.*` e tabelas existentes foram
+preservados. A próxima etapa estrutural deve ser mover cada domínio para apps Django
+reais usando migrations de estado (`SeparateDatabaseAndState`) e `db_table` explícito.

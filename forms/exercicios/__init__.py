@@ -1,0 +1,2 @@
+"""Exercício domain package."""
+

@@ -1,87 +1,12 @@
-from django.urls import path
-
-from .views import (
-    AvaliacaoCreateView,
-    AvaliacaoDeleteView,
-    AvaliacaoDetailView,
-    AvaliacaoListView,
-    AvaliacaoUpdateView,
-    CalendarDashboardView,
-    CategoriaExercicioCreateView,
-    CategoriaExercicioDeleteView,
-    CategoriaExercicioListView,
-    CategoriaExercicioUpdateView,
-    ExercicioCatalogoCreateView,
-    ExercicioCatalogoDeleteView,
-    ExercicioCatalogoListView,
-    ExercicioCatalogoUpdateView,
-    PacienteCreateView,
-    PacienteDeleteView,
-    PacienteDetailView,
-    PacienteListView,
-    PacienteUpdateView,
-    ProcedimentoCreateView,
-    ProcedimentoDeleteView,
-    ProcedimentoDetailView,
-    ProcedimentoBulkScheduleView,
-    ProcedimentoListView,
-    ProcedimentoUpdateView,
-    TipoProcedimentoCreateView,
-    TipoProcedimentoDeleteView,
-    TipoProcedimentoListView,
-    TipoProcedimentoUpdateView,
-    add_sessao,
-    calendar_events,
-    edit_sessao,
-    get_paciente_data,
-    toggle_procedimento_concluido,
-    update_sessao_exercicios,
-    update_status_sessao,
-)
+from .avaliacoes.urls import urlpatterns as avaliacoes_urlpatterns
+from .exercicios.urls import urlpatterns as exercicios_urlpatterns
+from .pacientes.urls import urlpatterns as pacientes_urlpatterns
+from .procedimentos.urls import urlpatterns as procedimentos_urlpatterns
 
 
 urlpatterns = [
-    path("api/paciente/<int:paciente_id>/", get_paciente_data, name="api-paciente-data"),
-
-    path("inscricao/", PacienteListView.as_view(), name="inscricao-list"),
-    path("inscricao/nova/", PacienteCreateView.as_view(), name="inscricao-create"),
-    path("inscricao/<int:pk>/", PacienteDetailView.as_view(), name="inscricao-detail"),
-    path("inscricao/<int:pk>/editar/", PacienteUpdateView.as_view(), name="inscricao-update"),
-    path("inscricao/<int:pk>/deletar/", PacienteDeleteView.as_view(), name="inscricao-delete"),
-
-    path("avaliacoes/", AvaliacaoListView.as_view(), name="avaliacao-list"),
-    path("avaliacoes/nova/", AvaliacaoCreateView.as_view(), name="avaliacao-create"),
-    path("avaliacoes/<int:pk>/", AvaliacaoDetailView.as_view(), name="avaliacao-detail"),
-    path("avaliacoes/<int:pk>/editar/", AvaliacaoUpdateView.as_view(), name="avaliacao-update"),
-    path("avaliacoes/<int:pk>/deletar/", AvaliacaoDeleteView.as_view(), name="avaliacao-delete"),
-
-    path("procedimentos/", ProcedimentoListView.as_view(), name="procedure-list"),
-    path("procedimentos/novo/", ProcedimentoCreateView.as_view(), name="procedure-create"),
-    path("procedimentos/<int:pk>/", ProcedimentoDetailView.as_view(), name="procedure-detail"),
-    path("procedimentos/<int:pk>/agendamento-lote/", ProcedimentoBulkScheduleView.as_view(), name="procedure-bulk-schedule"),
-    path("procedimentos/<int:pk>/editar/", ProcedimentoUpdateView.as_view(), name="procedure-update"),
-    path("procedimentos/<int:pk>/deletar/", ProcedimentoDeleteView.as_view(), name="procedure-delete"),
-    path("procedimentos/<int:pk>/toggle-concluido/", toggle_procedimento_concluido, name="procedure-toggle-complete"),
-    path("exercicios/", ExercicioCatalogoListView.as_view(), name="exercise-list"),
-    path("exercicios/novo/", ExercicioCatalogoCreateView.as_view(), name="exercise-create"),
-    path("exercicios/<int:pk>/editar/", ExercicioCatalogoUpdateView.as_view(), name="exercise-update"),
-    path("exercicios/<int:pk>/deletar/", ExercicioCatalogoDeleteView.as_view(), name="exercise-delete"),
-
-    path("categorias-exercicios/", CategoriaExercicioListView.as_view(), name="exercise-category-list"),
-    path("categorias-exercicios/nova/", CategoriaExercicioCreateView.as_view(), name="exercise-category-create"),
-    path("categorias-exercicios/<int:pk>/editar/", CategoriaExercicioUpdateView.as_view(), name="exercise-category-update"),
-    path("categorias-exercicios/<int:pk>/deletar/", CategoriaExercicioDeleteView.as_view(), name="exercise-category-delete"),
-
-    path("tipos-procedimento/", TipoProcedimentoListView.as_view(), name="procedure-type-list"),
-    path("tipos-procedimento/novo/", TipoProcedimentoCreateView.as_view(), name="procedure-type-create"),
-    path("tipos-procedimento/<int:pk>/editar/", TipoProcedimentoUpdateView.as_view(), name="procedure-type-update"),
-    path("tipos-procedimento/<int:pk>/deletar/", TipoProcedimentoDeleteView.as_view(), name="procedure-type-delete"),
-
-    path("procedimentos/<int:pk>/sessoes/nova/", add_sessao, name="procedure-session-add"),
-    path("sessoes/<int:session_id>/editar/", edit_sessao, name="procedure-session-edit"),
-    path("sessoes/<int:session_id>/exercicios/", update_sessao_exercicios, name="session-exercise-update"),
-    path("sessoes/<int:session_id>/status/<slug:status>/", update_status_sessao, name="procedure-session-status"),
-
-    path("calendario/", CalendarDashboardView.as_view(), name="calendar-dashboard"),
-    path("calendario/eventos/", calendar_events, name="calendar-events"),
+    *pacientes_urlpatterns,
+    *avaliacoes_urlpatterns,
+    *procedimentos_urlpatterns,
+    *exercicios_urlpatterns,
 ]
