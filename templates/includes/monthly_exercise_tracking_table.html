@@ -23,13 +23,28 @@
                 <tbody>
                     {% for group in exercise_tracking.groups %}
                     <tr class="exercise-tracking-category-row">
-                        <th colspan="{{ exercise_tracking.days|length|add:'1' }}" scope="colgroup">{{ group.category }}</th>
+                        <th class="exercise-tracking-name-col exercise-tracking-category-name-cell" scope="colgroup">
+                            <button
+                                class="exercise-tracking-category-toggle"
+                                type="button"
+                                data-exercise-tracking-toggle
+                                data-target="exercise-tracking-group-{{ forloop.counter }}"
+                                aria-expanded="true"
+                            >
+                                <span class="exercise-tracking-category-caret" aria-hidden="true">v</span>
+                                <span>{{ group.category }}</span>
+                                <span class="badge bg-light text-dark border">{{ group.exercises|length }}</span>
+                            </button>
+                        </th>
+                        <td class="exercise-tracking-category-fill" colspan="{{ exercise_tracking.days|length }}">
+                            {{ group.category }}
+                        </td>
                     </tr>
                     {% for exercise in group.exercises %}
-                    <tr>
+                    <tr data-exercise-tracking-row="exercise-tracking-group-{{ forloop.parentloop.counter }}">
                         <th scope="row" class="exercise-tracking-name-col {{ exercise.name_class }}">{{ exercise.name }}</th>
                         {% for day in exercise.days %}
-                        <td class="exercise-tracking-day-cell {{ day.cell_class }}">{% if day.marked %}X{% endif %}</td>
+                        <td class="exercise-tracking-day-cell {{ day.cell_class }}">{% if day.marked %}<span class="exercise-tracking-mark">X</span>{% endif %}</td>
                         {% endfor %}
                     </tr>
                     {% endfor %}
