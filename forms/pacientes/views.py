@@ -7,6 +7,11 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from ..core.mixins import SoftDeleteSuccessMessageMixin
+from ..exercicios.presenters.monthly_tracking import present_monthly_tracking_table
+from ..exercicios.services.monthly_tracking import (
+    build_monthly_exercise_tracking_table,
+    parse_month_reference,
+)
 from .forms import PacienteForm
 from .models import Paciente
 from .selectors import get_paciente_detail_context, serialize_paciente_summary
@@ -33,6 +38,9 @@ class PacienteDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(get_paciente_detail_context(self.object))
+        month = parse_month_reference(self.request.GET.get("month"))
+        tracking = build_monthly_exercise_tracking_table(self.object, month)
+        context["exercise_tracking"] = present_monthly_tracking_table(tracking)
         return context
 
 
@@ -63,4 +71,3 @@ class PacienteDeleteView(SoftDeleteSuccessMessageMixin, LoginRequiredMixin, Dele
     template_name = "forms/inscricao_confirm_delete.html"
     success_url = reverse_lazy("inscricao-list")
     delete_success_message = "Paciente removido com sucesso."
-

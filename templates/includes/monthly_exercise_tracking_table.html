@@ -1,0 +1,44 @@
+<div class="card exercise-tracking-card mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h5 class="card-title mb-0">Controle Mensal de Exercícios</h5>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.previous_month_param }}">Mês anterior</a>
+                <span class="badge bg-light text-dark border">{{ exercise_tracking.month_label }}</span>
+                <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.next_month_param }}">Próximo mês</a>
+            </div>
+        </div>
+
+        {% if exercise_tracking.groups %}
+        <div class="table-responsive exercise-tracking-table-wrap">
+            <table class="table table-sm table-bordered align-middle exercise-tracking-table">
+                <thead>
+                    <tr>
+                        <th scope="col" class="exercise-tracking-name-col">Exercício</th>
+                        {% for day in exercise_tracking.days %}
+                        <th scope="col" class="exercise-tracking-day-col {{ day.header_class }}">{{ day.day }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in exercise_tracking.groups %}
+                    <tr class="exercise-tracking-category-row">
+                        <th colspan="{{ exercise_tracking.days|length|add:'1' }}" scope="colgroup">{{ group.category }}</th>
+                    </tr>
+                    {% for exercise in group.exercises %}
+                    <tr>
+                        <th scope="row" class="exercise-tracking-name-col {{ exercise.name_class }}">{{ exercise.name }}</th>
+                        {% for day in exercise.days %}
+                        <td class="exercise-tracking-day-cell {{ day.cell_class }}">{% if day.marked %}X{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Nenhum exercício vinculado ao histórico deste paciente.</p>
+        {% endif %}
+    </div>
+</div>

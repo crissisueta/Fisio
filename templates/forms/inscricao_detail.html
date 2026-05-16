@@ -2,6 +2,67 @@
 
 {% block title %}{{ ficha.nome }} - Paciente{% endblock %}
 
+{% block extra_css %}
+<style>
+    .exercise-tracking-card { min-height: calc(100vh - 150px); }
+    .exercise-tracking-card .card-body {
+        display: flex;
+        flex-direction: column;
+    }
+    .exercise-tracking-table-wrap {
+        flex: 1;
+        max-height: calc(100vh - 255px);
+        overflow: auto;
+    }
+    .exercise-tracking-table { min-width: max-content; }
+    .exercise-tracking-table th,
+    .exercise-tracking-table td { text-align: center; white-space: nowrap; }
+    .exercise-tracking-table thead th {
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .exercise-tracking-name-col {
+        min-width: 210px;
+        text-align: left !important;
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 1;
+    }
+    .exercise-tracking-category-row th {
+        background: #f1f3f5;
+        color: #495057;
+        font-size: 0.8rem;
+        letter-spacing: 0;
+        text-align: left !important;
+        text-transform: uppercase;
+    }
+    .exercise-tracking-day-col,
+    .exercise-tracking-day-cell { width: 36px; min-width: 36px; }
+    .exercise-tracking-day-cell { font-weight: 600; }
+    .exercise-tracking-table th.exercise-tracking-day-past,
+    .exercise-tracking-table td.exercise-tracking-day-past {
+        background: #f8f9fa;
+        color: #6c757d;
+    }
+    .exercise-tracking-table th.exercise-tracking-day-today,
+    .exercise-tracking-table td.exercise-tracking-day-today {
+        background: #fff3cd;
+        color: #664d03;
+        box-shadow: inset 0 0 0 2px #ffc107;
+    }
+    .exercise-tracking-table th.exercise-tracking-day-future,
+    .exercise-tracking-table td.exercise-tracking-day-future {
+        background: #eef7ff;
+        color: #084298;
+    }
+    .patient-info-drawer .collapse,
+    .patient-info-drawer .collapsing { border-top: 1px solid #e9ecef; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-10"><h1>{{ ficha.nome }}</h1></div>
@@ -13,50 +74,7 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <h5 class="card-title">Dados do Paciente</h5>
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>CPF:</strong> {{ ficha.cpf }}</p>
-                <p><strong>Email:</strong> {{ ficha.email }}</p>
-                <p><strong>Data de Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
-                <p><strong>Profissão:</strong> {{ ficha.profissao|default:"N/A" }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Telefone:</strong> {{ ficha.telefone }}</p>
-                <p><strong>Celular:</strong> {{ ficha.celular }}</p>
-                <p><strong>Telefone Comercial:</strong> {{ ficha.telefone_comercial }}</p>
-            </div>
-        </div>
-
-        <hr>
-        <h5 class="card-title">Endereço</h5>
-        <div class="row">
-            <div class="col-md-6"><p><strong>Endereço:</strong> {{ ficha.endereco }}</p><p><strong>Bairro:</strong> {{ ficha.bairro }}</p></div>
-            <div class="col-md-6"><p><strong>CEP:</strong> {{ ficha.cep }}</p></div>
-        </div>
-
-        <hr>
-        <h5 class="card-title">Cadastro</h5>
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Data de Matrícula:</strong> {{ ficha.data_matricula|date:"d/m/Y" }}</p>
-                <p><strong>Plano:</strong> {{ ficha.plano }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Criado em:</strong> {{ ficha.created_at|date:"d/m/Y H:i" }}</p>
-                <p><strong>Atualizado em:</strong> {{ ficha.updated_at|date:"d/m/Y H:i" }}</p>
-            </div>
-        </div>
-
-        {% if ficha.observacoes %}
-        <hr>
-        <h5 class="card-title">Observações</h5>
-        <p>{{ ficha.observacoes }}</p>
-        {% endif %}
-    </div>
-</div>
+{% include 'includes/monthly_exercise_tracking_table.html' %}
 
 <div class="card mt-4">
     <div class="card-body">
@@ -107,6 +125,68 @@
         {% else %}
         <p class="text-muted">Nenhum procedimento registrado para este paciente.</p>
         {% endif %}
+    </div>
+</div>
+
+<div class="card mt-4 patient-info-drawer">
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h5 class="card-title mb-1">Dados do Paciente</h5>
+            <p class="text-muted mb-0">Informações cadastrais, contato, endereço e observações.</p>
+        </div>
+        <button
+            class="btn btn-outline-primary"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#patientInfoDrawer"
+            aria-expanded="false"
+            aria-controls="patientInfoDrawer"
+        >
+            Abrir dados
+        </button>
+    </div>
+    <div class="collapse" id="patientInfoDrawer">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>CPF:</strong> {{ ficha.cpf }}</p>
+                    <p><strong>Email:</strong> {{ ficha.email }}</p>
+                    <p><strong>Data de Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
+                    <p><strong>Profissão:</strong> {{ ficha.profissao|default:"N/A" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Telefone:</strong> {{ ficha.telefone }}</p>
+                    <p><strong>Celular:</strong> {{ ficha.celular }}</p>
+                    <p><strong>Telefone Comercial:</strong> {{ ficha.telefone_comercial }}</p>
+                </div>
+            </div>
+
+            <hr>
+            <h5 class="card-title">Endereço</h5>
+            <div class="row">
+                <div class="col-md-6"><p><strong>Endereço:</strong> {{ ficha.endereco }}</p><p><strong>Bairro:</strong> {{ ficha.bairro }}</p></div>
+                <div class="col-md-6"><p><strong>CEP:</strong> {{ ficha.cep }}</p></div>
+            </div>
+
+            <hr>
+            <h5 class="card-title">Cadastro</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Data de Matrícula:</strong> {{ ficha.data_matricula|date:"d/m/Y" }}</p>
+                    <p><strong>Plano:</strong> {{ ficha.plano }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Criado em:</strong> {{ ficha.created_at|date:"d/m/Y H:i" }}</p>
+                    <p><strong>Atualizado em:</strong> {{ ficha.updated_at|date:"d/m/Y H:i" }}</p>
+                </div>
+            </div>
+
+            {% if ficha.observacoes %}
+            <hr>
+            <h5 class="card-title">Observações</h5>
+            <p>{{ ficha.observacoes }}</p>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
