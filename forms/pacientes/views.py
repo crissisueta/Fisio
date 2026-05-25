@@ -17,6 +17,7 @@ from ..exercicios.services.monthly_tracking import (
     build_monthly_exercise_tracking_table,
     mark_exercise_day_for_patient,
     parse_month_reference,
+    unmark_exercise_day_for_patient,
 )
 from .forms import PacienteForm
 from .models import Paciente
@@ -40,17 +41,33 @@ def mark_paciente_exercise_day(request, pk):
             raise ValueError
         exercise_id = int(payload.get("exercise_id"))
         target_date = parse_date(payload.get("date") or "")
+        action = payload.get("action", "mark")
         if target_date is None:
             raise ValueError
     except (json.JSONDecodeError, TypeError, ValueError):
         return JsonResponse({"success": False, "error": "Informe exercício e data válidos."}, status=400)
 
     try:
-        result = mark_exercise_day_for_patient(
-            paciente,
-            exercise_id=exercise_id,
-            target_date=target_date,
-        )
+        if action == "unmark":
+            result = unmark_exercise_day_for_patient(
+                paciente,
+                exercise_id=exercise_id,
+                target_date=target_date,
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "action": "unmark",
+                    "exercise_id": result.exercise_id,
+                    "date": result.target_date.isoformat(),
+                    "session_id": result.sessao_id,
+                    "deleted_session": result.deleted_session,
+                }
+            )
+        if action != "mark":
+            raise ValidationError("Ação inválida.")
+
+        result = mark_exercise_day_for_patient(paciente, exercise_id=exercise_id, target_date=target_date)
     except ObjectDoesNotExist:
         return JsonResponse({"success": False, "error": "Exercício não encontrado."}, status=404)
     except ValidationError as exc:
@@ -59,6 +76,7 @@ def mark_paciente_exercise_day(request, pk):
     return JsonResponse(
         {
             "success": True,
+            "action": "mark",
             "exercise_id": result.sessao_exercicio.exercicio_id,
             "date": result.target_date.isoformat(),
             "session_id": result.sessao.pk,
@@ -86,7 +104,8 @@ class PacienteDetailView(LoginRequiredMixin, DetailView):
         context.update(get_paciente_detail_context(self.object))
         month = parse_month_reference(self.request.GET.get("month"))
         tracking = build_monthly_exercise_tracking_table(self.object, month)
-        context["exercise_tracking"] = present_monthly_tracking_table(tracking)
+        next_tracking = build_monthly_exercise_tracking_table(self.object, tracking.next_month_param)
+        context["exercise_tracking"] = present_monthly_tracking_table(tracking, next_tracking)
         return context
 
 

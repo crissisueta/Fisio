@@ -16,6 +16,7 @@ from forms.exercicios.services.monthly_tracking import (
     DAY_TODAY,
     build_monthly_exercise_tracking_table,
     mark_exercise_day_for_patient,
+    unmark_exercise_day_for_patient,
 )
 from forms.models import ProcedimentoExercicio, Sessao, SessaoExercicio
 
@@ -201,6 +202,53 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(row.color_state, COLOR_BLACK)
 
     @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_unmark_exercise_day_removes_table_created_mark(self, _mock_localdate):
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        exercicio = self.create_exercicio(nome="Desmarcado pelo controle mensal")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+        mark_result = mark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercicio.pk,
+            target_date=date(2026, 5, 3),
+        )
+
+        result = unmark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercicio.pk,
+            target_date=date(2026, 5, 3),
+        )
+
+        self.assertTrue(result.deleted_session)
+        self.assertFalse(Sessao.objects.filter(pk=mark_result.sessao.pk).exists())
+        self.assertFalse(SessaoExercicio.objects.filter(pk=mark_result.sessao_exercicio.pk).exists())
+        table = build_monthly_exercise_tracking_table(paciente, "2026-05")
+        row = self.exercise_rows_by_name(table)["Desmarcado pelo controle mensal"]
+        self.assertEqual(self.performed_days(row), [])
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_unmark_fallback_session_materializes_remaining_exercises(self, _mock_localdate):
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        removed_exercise = self.create_exercicio(nome="Remover do fallback")
+        remaining_exercise = self.create_exercicio(nome="Manter no fallback")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=removed_exercise)
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=remaining_exercise)
+        self.create_session_with_status(procedimento, datetime(2026, 5, 5, 9, 0), Sessao.STATUS_REALIZADA)
+
+        result = unmark_exercise_day_for_patient(
+            paciente,
+            exercise_id=removed_exercise.pk,
+            target_date=date(2026, 5, 5),
+        )
+
+        self.assertFalse(result.deleted_session)
+        table = build_monthly_exercise_tracking_table(paciente, "2026-05")
+        rows = self.exercise_rows_by_name(table)
+        self.assertEqual(self.performed_days(rows["Remover do fallback"]), [])
+        self.assertEqual(self.performed_days(rows["Manter no fallback"]), [5])
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_exercise_day_mark_endpoint_is_patient_scoped(self, _mock_localdate):
         user = self.create_user()
         paciente = self.create_paciente()
@@ -225,6 +273,38 @@ class ExerciseTests(RegressionBaseTestCase):
                 sessao__procedimento=procedimento,
                 exercicio=exercicio,
                 sessao__status=Sessao.STATUS_REALIZADA,
+            ).exists()
+        )
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_patient_exercise_day_endpoint_unmarks_existing_mark(self, _mock_localdate):
+        user = self.create_user()
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        exercicio = self.create_exercicio(nome="Desmarcado via endpoint")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+        mark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercicio.pk,
+            target_date=date(2026, 5, 4),
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("patient-exercise-day-mark", args=[paciente.pk]),
+            data=json.dumps({"action": "unmark", "exercise_id": exercicio.pk, "date": "2026-05-04"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["action"], "unmark")
+        self.assertEqual(payload["exercise_id"], exercicio.pk)
+        self.assertFalse(
+            SessaoExercicio.objects.filter(
+                sessao__procedimento=procedimento,
+                exercicio=exercicio,
             ).exists()
         )
 

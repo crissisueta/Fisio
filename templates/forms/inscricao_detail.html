@@ -139,6 +139,10 @@
         background: #eef7ff;
         color: #084298;
     }
+    .exercise-tracking-table .exercise-tracking-month-boundary,
+    .exercise-tracking-table .exercise-tracking-visible-month-boundary {
+        border-left: 3px solid #495057 !important;
+    }
     .exercise-tracking-category-row .exercise-tracking-category-fill {
         background: #f1f3f5;
         color: #6c757d;
@@ -334,9 +338,44 @@
         return cookieValue;
     }
 
-    function isPastDayIndex(table, dayIndex) {
-        var header = table.querySelector('thead [data-day-index="' + dayIndex + '"]');
+    function isPastDayKey(table, dayKey) {
+        var header = table.querySelector('thead [data-day-key="' + dayKey + '"]');
         return header && header.dataset.dayTemporalState === 'past';
+    }
+
+    function visibleDayCountForSegment(table, segment) {
+        var visibleDayCount = 0;
+        table.querySelectorAll('thead [data-month-segment="' + segment + '"]').forEach(function (element) {
+            if (!element.hidden) {
+                visibleDayCount += 1;
+            }
+        });
+        return visibleDayCount;
+    }
+
+    function syncCategoryFill(table, segment, visibleDayCount) {
+        table.querySelectorAll('[data-exercise-category-fill="' + segment + '"]').forEach(function (element) {
+            element.hidden = visibleDayCount === 0;
+            element.colSpan = Math.max(visibleDayCount, 1);
+        });
+    }
+
+    function syncVisibleMonthBoundaries(table) {
+        table.querySelectorAll('.exercise-tracking-visible-month-boundary').forEach(function (element) {
+            element.classList.remove('exercise-tracking-visible-month-boundary');
+        });
+
+        table.querySelectorAll('tr').forEach(function (row) {
+            var visibleNextMonthCell = Array.prototype.find.call(
+                row.querySelectorAll('[data-month-segment="next"]'),
+                function (element) {
+                    return !element.hidden;
+                }
+            );
+            if (visibleNextMonthCell) {
+                visibleNextMonthCell.classList.add('exercise-tracking-visible-month-boundary');
+            }
+        });
     }
 
     function applyEmptyPastDayVisibility(card) {
@@ -347,32 +386,30 @@
         }
 
         var markedDays = {};
-        table.querySelectorAll('.exercise-tracking-day-cell[data-day-index][data-marked="true"]').forEach(function (cell) {
-            markedDays[cell.dataset.dayIndex] = true;
+        table.querySelectorAll('.exercise-tracking-day-cell[data-day-key][data-marked="true"]').forEach(function (cell) {
+            markedDays[cell.dataset.dayKey] = true;
         });
 
-        table.querySelectorAll('[data-day-index]').forEach(function (element) {
-            var dayIndex = element.dataset.dayIndex;
-            element.hidden = input.checked && isPastDayIndex(table, dayIndex) && !markedDays[dayIndex];
+        table.querySelectorAll('[data-day-key]').forEach(function (element) {
+            var dayKey = element.dataset.dayKey;
+            var showNextMonth = input.checked || element.dataset.monthSegment !== 'next';
+            element.hidden = !showNextMonth || (input.checked && isPastDayKey(table, dayKey) && !markedDays[dayKey]);
         });
 
-        var visibleDayCount = 0;
-        table.querySelectorAll('thead [data-day-index]').forEach(function (element) {
-            if (!element.hidden) {
-                visibleDayCount += 1;
-            }
-        });
-        table.querySelectorAll('[data-exercise-category-fill]').forEach(function (element) {
-            element.colSpan = Math.max(visibleDayCount, 1);
-        });
+        syncCategoryFill(table, 'current', visibleDayCountForSegment(table, 'current'));
+        syncCategoryFill(table, 'next', visibleDayCountForSegment(table, 'next'));
+        syncVisibleMonthBoundaries(table);
     }
 
     function markExerciseCell(button) {
         var cell = button.closest('.exercise-tracking-day-cell');
         var card = button.closest('[data-exercise-tracking-card]');
-        if (!cell || !card || cell.dataset.marked === 'true' || button.classList.contains('is-saving')) {
+        if (!cell || !card || button.classList.contains('is-saving')) {
             return;
         }
+
+        var isMarked = cell.dataset.marked === 'true';
+        var action = isMarked ? 'unmark' : 'mark';
 
         button.classList.add('is-saving');
         button.disabled = true;
@@ -385,6 +422,7 @@
                 'X-CSRFToken': card.dataset.csrfToken || getCookie('csrftoken'),
             },
             body: JSON.stringify({
+                action: action,
                 exercise_id: button.dataset.exerciseId,
                 date: button.dataset.date,
             }),
@@ -398,10 +436,19 @@
                 });
             })
             .then(function () {
-                cell.dataset.marked = 'true';
-                button.classList.add('is-marked');
-                button.setAttribute('aria-pressed', 'true');
-                button.innerHTML = '<span class="exercise-tracking-mark">X</span>';
+                if (action === 'unmark') {
+                    cell.dataset.marked = 'false';
+                    button.classList.remove('is-marked');
+                    button.setAttribute('aria-pressed', 'false');
+                    button.setAttribute('aria-label', 'Marcar ' + button.dataset.exerciseName + ' em ' + button.dataset.date);
+                    button.innerHTML = '';
+                } else {
+                    cell.dataset.marked = 'true';
+                    button.classList.add('is-marked');
+                    button.setAttribute('aria-pressed', 'true');
+                    button.setAttribute('aria-label', 'Desmarcar ' + button.dataset.exerciseName + ' em ' + button.dataset.date);
+                    button.innerHTML = '<span class="exercise-tracking-mark">X</span>';
+                }
                 applyEmptyPastDayVisibility(card);
             })
             .catch(function (error) {

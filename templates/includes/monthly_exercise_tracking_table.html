@@ -34,8 +34,22 @@
                         <th
                             scope="col"
                             class="exercise-tracking-day-col {{ day.header_class }}"
-                            data-day-index="{{ forloop.counter0 }}"
+                            data-day-key="current-{{ forloop.counter0 }}"
+                            data-month-segment="current"
                             data-day-temporal-state="{{ day.temporal_state }}"
+                        >
+                            {{ day.day }}
+                        </th>
+                        {% endfor %}
+                        {% for day in exercise_tracking.next_month_days %}
+                        <th
+                            scope="col"
+                            class="exercise-tracking-day-col {{ day.header_class }}{% if forloop.first %} exercise-tracking-month-boundary{% endif %}"
+                            data-day-key="next-{{ forloop.counter0 }}"
+                            data-month-segment="next"
+                            data-next-month-column
+                            data-day-temporal-state="{{ day.temporal_state }}"
+                            title="{{ exercise_tracking.next_month_label }}"
                         >
                             {{ day.day }}
                         </th>
@@ -61,7 +75,15 @@
                         <td
                             class="exercise-tracking-category-fill"
                             colspan="{{ exercise_tracking.days|length }}"
-                            data-exercise-category-fill
+                            data-exercise-category-fill="current"
+                        >
+                            {{ group.category }}
+                        </td>
+                        <td
+                            class="exercise-tracking-category-fill exercise-tracking-month-boundary"
+                            colspan="{{ exercise_tracking.next_month_days|length }}"
+                            data-exercise-category-fill="next"
+                            data-next-month-column
                         >
                             {{ group.category }}
                         </td>
@@ -72,7 +94,8 @@
                         {% for day in exercise.days %}
                         <td
                             class="exercise-tracking-day-cell {{ day.cell_class }}"
-                            data-day-index="{{ forloop.counter0 }}"
+                            data-day-key="current-{{ forloop.counter0 }}"
+                            data-month-segment="current"
                             data-day-temporal-state="{{ day.temporal_state }}"
                             data-marked="{% if day.marked %}true{% else %}false{% endif %}"
                         >
@@ -81,8 +104,32 @@
                                 class="exercise-tracking-cell-button{% if day.marked %} is-marked{% endif %}"
                                 data-exercise-tracking-cell
                                 data-exercise-id="{{ exercise.exercise_id }}"
+                                data-exercise-name="{{ exercise.name }}"
                                 data-date="{{ day.date|date:'Y-m-d' }}"
-                                aria-label="Marcar {{ exercise.name }} em {{ day.date|date:'d/m/Y' }}"
+                                aria-label="{% if day.marked %}Desmarcar{% else %}Marcar{% endif %} {{ exercise.name }} em {{ day.date|date:'d/m/Y' }}"
+                                aria-pressed="{% if day.marked %}true{% else %}false{% endif %}"
+                            >
+                                {% if day.marked %}<span class="exercise-tracking-mark">X</span>{% endif %}
+                            </button>
+                        </td>
+                        {% endfor %}
+                        {% for day in exercise.next_month_days %}
+                        <td
+                            class="exercise-tracking-day-cell {{ day.cell_class }}{% if forloop.first %} exercise-tracking-month-boundary{% endif %}"
+                            data-day-key="next-{{ forloop.counter0 }}"
+                            data-month-segment="next"
+                            data-next-month-column
+                            data-day-temporal-state="{{ day.temporal_state }}"
+                            data-marked="{% if day.marked %}true{% else %}false{% endif %}"
+                        >
+                            <button
+                                type="button"
+                                class="exercise-tracking-cell-button{% if day.marked %} is-marked{% endif %}"
+                                data-exercise-tracking-cell
+                                data-exercise-id="{{ exercise.exercise_id }}"
+                                data-exercise-name="{{ exercise.name }}"
+                                data-date="{{ day.date|date:'Y-m-d' }}"
+                                aria-label="{% if day.marked %}Desmarcar{% else %}Marcar{% endif %} {{ exercise.name }} em {{ day.date|date:'d/m/Y' }}"
                                 aria-pressed="{% if day.marked %}true{% else %}false{% endif %}"
                             >
                                 {% if day.marked %}<span class="exercise-tracking-mark">X</span>{% endif %}

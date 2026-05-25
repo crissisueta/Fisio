@@ -32,6 +32,7 @@ GRID_SESSION_STATUSES = {
 COMPLETED_SESSION_STATUSES = {
     Sessao.STATUS_REALIZADA,
 }
+TRACKING_SESSION_OBSERVATION = "Criada pelo controle mensal de exercícios."
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,14 @@ class MarkExerciseDayResult:
     sessao_exercicio: SessaoExercicio
     created_session: bool
     created_link: bool
+    target_date: date
+
+
+@dataclass(frozen=True)
+class UnmarkExerciseDayResult:
+    sessao_id: int
+    exercise_id: int
+    deleted_session: bool
     target_date: date
 
 
@@ -238,6 +247,46 @@ def mark_exercise_day_for_patient(
     )
 
 
+@transaction.atomic
+def unmark_exercise_day_for_patient(
+    paciente: Paciente,
+    *,
+    exercise_id: int,
+    target_date: date,
+) -> UnmarkExerciseDayResult:
+    """Remove a patient exercise mark from a calendar day."""
+
+    exercicio = ExercicioCatalogo.objects.select_related("categoria").get(pk=exercise_id)
+    sessao_exercicio = _get_explicit_session_exercise_for_date(paciente, exercicio, target_date)
+    if sessao_exercicio:
+        return _unmark_explicit_session_exercise(sessao_exercicio, target_date)
+
+    fallback_session = _get_fallback_session_for_date(paciente, exercicio, target_date)
+    if fallback_session is None:
+        raise ValidationError("Nenhum exercício marcado foi encontrado para este dia.")
+
+    materialized_count = _materialize_session_exercises_except(fallback_session, exercicio)
+    if materialized_count:
+        return UnmarkExerciseDayResult(
+            sessao_id=fallback_session.pk,
+            exercise_id=exercise_id,
+            deleted_session=False,
+            target_date=target_date,
+        )
+
+    if _is_tracking_created_session(fallback_session):
+        sessao_id = fallback_session.pk
+        fallback_session.delete()
+        return UnmarkExerciseDayResult(
+            sessao_id=sessao_id,
+            exercise_id=exercise_id,
+            deleted_session=True,
+            target_date=target_date,
+        )
+
+    raise ValidationError("Não foi possível desmarcar este exercício sem remover a sessão.")
+
+
 def _get_last_session_exercise_ids(last_session: Sessao | None) -> set[int]:
     if last_session is None:
         return set()
@@ -384,9 +433,118 @@ def _get_or_create_session_for_date(
         data_hora=_default_session_datetime_for_date(target_date),
         duracao_minutos=60,
         status=desired_status,
-        observacoes="Criada pelo controle mensal de exercícios.",
+        observacoes=TRACKING_SESSION_OBSERVATION,
     )
     return sessao, True
+
+
+def _unmark_explicit_session_exercise(
+    sessao_exercicio: SessaoExercicio,
+    target_date: date,
+) -> UnmarkExerciseDayResult:
+    sessao = sessao_exercicio.sessao
+    sessao_id = sessao.pk
+    exercise_id = sessao_exercicio.exercicio_id
+    active_other_count = (
+        SessaoExercicio.objects.filter(sessao=sessao, is_active=True)
+        .exclude(pk=sessao_exercicio.pk)
+        .count()
+    )
+
+    if active_other_count == 0 and _is_tracking_created_session(sessao):
+        sessao_exercicio.delete()
+        sessao.delete()
+        return UnmarkExerciseDayResult(
+            sessao_id=sessao_id,
+            exercise_id=exercise_id,
+            deleted_session=True,
+            target_date=target_date,
+        )
+
+    if active_other_count == 0:
+        materialized_count = _materialize_session_exercises_except(sessao, sessao_exercicio.exercicio)
+        if materialized_count == 0:
+            raise ValidationError("Não foi possível desmarcar este exercício sem remover a sessão.")
+
+    sessao_exercicio.delete()
+    return UnmarkExerciseDayResult(
+        sessao_id=sessao_id,
+        exercise_id=exercise_id,
+        deleted_session=False,
+        target_date=target_date,
+    )
+
+
+def _get_explicit_session_exercise_for_date(
+    paciente: Paciente,
+    exercicio: ExercicioCatalogo,
+    target_date: date,
+) -> SessaoExercicio | None:
+    start_datetime, end_datetime = _day_datetime_range(target_date)
+    return (
+        SessaoExercicio.objects.select_related("sessao", "sessao__procedimento", "exercicio")
+        .filter(
+            sessao__procedimento__paciente=paciente,
+            sessao__data_hora__gte=start_datetime,
+            sessao__data_hora__lte=end_datetime,
+            sessao__status__in=GRID_SESSION_STATUSES,
+            exercicio=exercicio,
+        )
+        .order_by("sessao__data_hora", "pk")
+        .first()
+    )
+
+
+def _get_fallback_session_for_date(
+    paciente: Paciente,
+    exercicio: ExercicioCatalogo,
+    target_date: date,
+) -> Sessao | None:
+    start_datetime, end_datetime = _day_datetime_range(target_date)
+    return (
+        Sessao.objects.filter(
+            procedimento__paciente=paciente,
+            data_hora__gte=start_datetime,
+            data_hora__lte=end_datetime,
+            status__in=GRID_SESSION_STATUSES,
+            procedimento__procedimento_exercicios__is_active=True,
+            procedimento__procedimento_exercicios__exercicio=exercicio,
+        )
+        .annotate(
+            active_session_exercise_count=Count(
+                "sessao_exercicios",
+                filter=Q(sessao_exercicios__is_active=True),
+            )
+        )
+        .filter(active_session_exercise_count=0)
+        .order_by("data_hora", "pk")
+        .first()
+    )
+
+
+def _materialize_session_exercises_except(sessao: Sessao, excluded_exercise: ExercicioCatalogo) -> int:
+    session_status = (
+        sessao.status
+        if sessao.status in GRID_SESSION_STATUSES
+        else _session_status_for_marked_date(timezone.localtime(sessao.data_hora).date())
+    )
+    procedure_items = list(
+        ProcedimentoExercicio.objects.filter(
+            procedimento=sessao.procedimento,
+        )
+        .exclude(exercicio=excluded_exercise)
+        .order_by("ordem", "created_at", "pk")
+    )
+
+    materialized_count = 0
+    for procedure_item in procedure_items:
+        _get_or_create_session_exercise(sessao, procedure_item, session_status)
+        materialized_count += 1
+    return materialized_count
+
+
+def _is_tracking_created_session(sessao: Sessao) -> bool:
+    return sessao.observacoes == TRACKING_SESSION_OBSERVATION
 
 
 def _sync_session_status_for_mark(sessao: Sessao, desired_status: str) -> None:
@@ -599,6 +757,14 @@ def _aware_month_boundary(value: date) -> datetime:
     )
 
 
+def _day_datetime_range(value: date) -> tuple[datetime, datetime]:
+    current_timezone = timezone.get_current_timezone()
+    return (
+        timezone.make_aware(datetime.combine(value, time.min), current_timezone),
+        timezone.make_aware(datetime.combine(value, time.max), current_timezone),
+    )
+
+
 def _previous_month(value: date) -> date:
     if value.month == 1:
         return date(value.year - 1, 12, 1)
@@ -628,7 +794,9 @@ __all__ = [
     "MonthlyExerciseRow",
     "MonthlyExerciseTrackingTable",
     "MarkExerciseDayResult",
+    "UnmarkExerciseDayResult",
     "build_monthly_exercise_tracking_table",
     "mark_exercise_day_for_patient",
     "parse_month_reference",
+    "unmark_exercise_day_for_patient",
 ]
