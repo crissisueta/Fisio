@@ -1,8 +1,23 @@
-<div class="card exercise-tracking-card mb-4">
+<div
+    class="card exercise-tracking-card mb-4"
+    data-exercise-tracking-card
+    data-mark-exercise-url="{% url 'patient-exercise-day-mark' ficha.pk %}"
+    data-csrf-token="{{ csrf_token }}"
+>
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <h5 class="card-title mb-0">Controle Mensal de Exercícios</h5>
             <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="form-check form-switch mb-0">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="hideEmptyPastExerciseDays"
+                        checked
+                        data-hide-empty-past-exercise-days
+                    >
+                    <label class="form-check-label small" for="hideEmptyPastExerciseDays">Ocultar dias passados vazios</label>
+                </div>
                 <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.previous_month_param }}">Mês anterior</a>
                 <span class="badge bg-light text-dark border">{{ exercise_tracking.month_label }}</span>
                 <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.next_month_param }}">Próximo mês</a>
@@ -16,7 +31,14 @@
                     <tr>
                         <th scope="col" class="exercise-tracking-name-col">Exercício</th>
                         {% for day in exercise_tracking.days %}
-                        <th scope="col" class="exercise-tracking-day-col {{ day.header_class }}">{{ day.day }}</th>
+                        <th
+                            scope="col"
+                            class="exercise-tracking-day-col {{ day.header_class }}"
+                            data-day-index="{{ forloop.counter0 }}"
+                            data-day-temporal-state="{{ day.temporal_state }}"
+                        >
+                            {{ day.day }}
+                        </th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -36,7 +58,11 @@
                                 <span class="badge bg-light text-dark border">{{ group.exercises|length }}</span>
                             </button>
                         </th>
-                        <td class="exercise-tracking-category-fill" colspan="{{ exercise_tracking.days|length }}">
+                        <td
+                            class="exercise-tracking-category-fill"
+                            colspan="{{ exercise_tracking.days|length }}"
+                            data-exercise-category-fill
+                        >
                             {{ group.category }}
                         </td>
                     </tr>
@@ -44,7 +70,24 @@
                     <tr data-exercise-tracking-row="exercise-tracking-group-{{ forloop.parentloop.counter }}">
                         <th scope="row" class="exercise-tracking-name-col {{ exercise.name_class }}">{{ exercise.name }}</th>
                         {% for day in exercise.days %}
-                        <td class="exercise-tracking-day-cell {{ day.cell_class }}">{% if day.marked %}<span class="exercise-tracking-mark">X</span>{% endif %}</td>
+                        <td
+                            class="exercise-tracking-day-cell {{ day.cell_class }}"
+                            data-day-index="{{ forloop.counter0 }}"
+                            data-day-temporal-state="{{ day.temporal_state }}"
+                            data-marked="{% if day.marked %}true{% else %}false{% endif %}"
+                        >
+                            <button
+                                type="button"
+                                class="exercise-tracking-cell-button{% if day.marked %} is-marked{% endif %}"
+                                data-exercise-tracking-cell
+                                data-exercise-id="{{ exercise.exercise_id }}"
+                                data-date="{{ day.date|date:'Y-m-d' }}"
+                                aria-label="Marcar {{ exercise.name }} em {{ day.date|date:'d/m/Y' }}"
+                                aria-pressed="{% if day.marked %}true{% else %}false{% endif %}"
+                            >
+                                {% if day.marked %}<span class="exercise-tracking-mark">X</span>{% endif %}
+                            </button>
+                        </td>
                         {% endfor %}
                     </tr>
                     {% endfor %}

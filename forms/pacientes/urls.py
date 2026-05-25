@@ -7,6 +7,7 @@ from .views import (
     PacienteListView,
     PacienteUpdateView,
     get_paciente_data,
+    mark_paciente_exercise_day,
 )
 
 
@@ -15,7 +16,11 @@ urlpatterns = [
     path("inscricao/", PacienteListView.as_view(), name="inscricao-list"),
     path("inscricao/nova/", PacienteCreateView.as_view(), name="inscricao-create"),
     path("inscricao/<int:pk>/", PacienteDetailView.as_view(), name="inscricao-detail"),
+    path(
+        "inscricao/<int:pk>/exercicios/marcar-dia/",
+        mark_paciente_exercise_day,
+        name="patient-exercise-day-mark",
+    ),
     path("inscricao/<int:pk>/editar/", PacienteUpdateView.as_view(), name="inscricao-update"),
     path("inscricao/<int:pk>/deletar/", PacienteDeleteView.as_view(), name="inscricao-delete"),
 ]
-

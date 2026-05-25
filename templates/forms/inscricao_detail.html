@@ -14,7 +14,10 @@
         max-height: calc(100vh - 255px);
         overflow: auto;
     }
-    .exercise-tracking-table { min-width: max-content; }
+    .exercise-tracking-table {
+        min-width: max-content;
+        width: max-content;
+    }
     .exercise-tracking-table th,
     .exercise-tracking-table td { text-align: center; white-space: nowrap; }
     .exercise-tracking-table thead th {
@@ -24,11 +27,16 @@
         z-index: 2;
     }
     .exercise-tracking-name-col {
-        min-width: 210px;
+        line-height: 1.2;
+        max-width: 170px;
+        min-width: 170px;
         text-align: left !important;
         position: sticky;
         left: 0;
         background: #fff;
+        overflow-wrap: anywhere;
+        white-space: normal !important;
+        width: 170px;
         z-index: 1;
     }
     .exercise-tracking-category-row th {
@@ -48,8 +56,12 @@
         color: #6c757d;
         font-size: 0.78rem;
         font-weight: 700;
+        overflow: hidden;
+        padding-left: 0.75rem !important;
         text-align: left !important;
+        text-overflow: ellipsis;
         text-transform: uppercase;
+        white-space: nowrap;
     }
     .exercise-tracking-category-toggle {
         align-items: center;
@@ -75,8 +87,38 @@
         width: 14px;
     }
     .exercise-tracking-day-col,
-    .exercise-tracking-day-cell { width: 36px; min-width: 36px; }
-    .exercise-tracking-day-cell { font-weight: 600; }
+    .exercise-tracking-day-cell {
+        max-width: 36px;
+        min-width: 36px;
+        width: 36px;
+    }
+    .exercise-tracking-day-cell {
+        font-weight: 600;
+        padding: 0 !important;
+    }
+    .exercise-tracking-cell-button {
+        align-items: center;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        display: inline-flex;
+        font: inherit;
+        height: 32px;
+        justify-content: center;
+        padding: 0;
+        transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        width: 100%;
+    }
+    .exercise-tracking-cell-button:hover,
+    .exercise-tracking-cell-button:focus {
+        background: rgba(13, 110, 253, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.24);
+        outline: 0;
+    }
+    .exercise-tracking-cell-button.is-saving {
+        opacity: 0.55;
+        pointer-events: none;
+    }
     .exercise-tracking-mark {
         color: #dc3545;
         font-weight: 800;
@@ -96,6 +138,10 @@
     .exercise-tracking-table td.exercise-tracking-day-future {
         background: #eef7ff;
         color: #084298;
+    }
+    .exercise-tracking-category-row .exercise-tracking-category-fill {
+        background: #f1f3f5;
+        color: #6c757d;
     }
     .exercise-color-help-button {
         align-items: center;
@@ -273,6 +319,115 @@
                 caret.textContent = expanded ? '>' : 'v';
             }
         });
+    });
+
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(function (cookie) {
+                var trimmed = cookie.trim();
+                if (trimmed.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(trimmed.substring(name.length + 1));
+                }
+            });
+        }
+        return cookieValue;
+    }
+
+    function isPastDayIndex(table, dayIndex) {
+        var header = table.querySelector('thead [data-day-index="' + dayIndex + '"]');
+        return header && header.dataset.dayTemporalState === 'past';
+    }
+
+    function applyEmptyPastDayVisibility(card) {
+        var input = card.querySelector('[data-hide-empty-past-exercise-days]');
+        var table = card.querySelector('.exercise-tracking-table');
+        if (!input || !table) {
+            return;
+        }
+
+        var markedDays = {};
+        table.querySelectorAll('.exercise-tracking-day-cell[data-day-index][data-marked="true"]').forEach(function (cell) {
+            markedDays[cell.dataset.dayIndex] = true;
+        });
+
+        table.querySelectorAll('[data-day-index]').forEach(function (element) {
+            var dayIndex = element.dataset.dayIndex;
+            element.hidden = input.checked && isPastDayIndex(table, dayIndex) && !markedDays[dayIndex];
+        });
+
+        var visibleDayCount = 0;
+        table.querySelectorAll('thead [data-day-index]').forEach(function (element) {
+            if (!element.hidden) {
+                visibleDayCount += 1;
+            }
+        });
+        table.querySelectorAll('[data-exercise-category-fill]').forEach(function (element) {
+            element.colSpan = Math.max(visibleDayCount, 1);
+        });
+    }
+
+    function markExerciseCell(button) {
+        var cell = button.closest('.exercise-tracking-day-cell');
+        var card = button.closest('[data-exercise-tracking-card]');
+        if (!cell || !card || cell.dataset.marked === 'true' || button.classList.contains('is-saving')) {
+            return;
+        }
+
+        button.classList.add('is-saving');
+        button.disabled = true;
+
+        fetch(card.dataset.markExerciseUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': card.dataset.csrfToken || getCookie('csrftoken'),
+            },
+            body: JSON.stringify({
+                exercise_id: button.dataset.exerciseId,
+                date: button.dataset.date,
+            }),
+        })
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    if (!response.ok || !payload.success) {
+                        throw new Error(payload.error || 'Não foi possível marcar o exercício.');
+                    }
+                    return payload;
+                });
+            })
+            .then(function () {
+                cell.dataset.marked = 'true';
+                button.classList.add('is-marked');
+                button.setAttribute('aria-pressed', 'true');
+                button.innerHTML = '<span class="exercise-tracking-mark">X</span>';
+                applyEmptyPastDayVisibility(card);
+            })
+            .catch(function (error) {
+                alert(error.message);
+            })
+            .finally(function () {
+                button.classList.remove('is-saving');
+                button.disabled = false;
+            });
+    }
+
+    document.querySelectorAll('[data-exercise-tracking-card]').forEach(function (card) {
+        var input = card.querySelector('[data-hide-empty-past-exercise-days]');
+        if (input) {
+            input.addEventListener('change', function () {
+                applyEmptyPastDayVisibility(card);
+            });
+        }
+
+        card.querySelectorAll('[data-exercise-tracking-cell]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                markExerciseCell(button);
+            });
+        });
+
+        applyEmptyPastDayVisibility(card);
     });
 </script>
 {% endblock %}

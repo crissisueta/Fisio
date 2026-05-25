@@ -1,15 +1,21 @@
+import json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.utils.dateparse import parse_date
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from ..core.mixins import SoftDeleteSuccessMessageMixin
 from ..exercicios.presenters.monthly_tracking import present_monthly_tracking_table
 from ..exercicios.services.monthly_tracking import (
     build_monthly_exercise_tracking_table,
+    mark_exercise_day_for_patient,
     parse_month_reference,
 )
 from .forms import PacienteForm
@@ -21,6 +27,46 @@ from .selectors import get_paciente_detail_context, serialize_paciente_summary
 def get_paciente_data(request, paciente_id):
     paciente = get_object_or_404(Paciente, pk=paciente_id)
     return JsonResponse(serialize_paciente_summary(paciente))
+
+
+@login_required
+@require_POST
+def mark_paciente_exercise_day(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError
+        exercise_id = int(payload.get("exercise_id"))
+        target_date = parse_date(payload.get("date") or "")
+        if target_date is None:
+            raise ValueError
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Informe exercício e data válidos."}, status=400)
+
+    try:
+        result = mark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercise_id,
+            target_date=target_date,
+        )
+    except ObjectDoesNotExist:
+        return JsonResponse({"success": False, "error": "Exercício não encontrado."}, status=404)
+    except ValidationError as exc:
+        return JsonResponse({"success": False, "error": " ".join(exc.messages)}, status=400)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "exercise_id": result.sessao_exercicio.exercicio_id,
+            "date": result.target_date.isoformat(),
+            "session_id": result.sessao.pk,
+            "session_status": result.sessao.status,
+            "created_session": result.created_session,
+            "created_link": result.created_link,
+        }
+    )
 
 
 class PacienteListView(LoginRequiredMixin, ListView):

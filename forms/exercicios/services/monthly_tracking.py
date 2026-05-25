@@ -4,13 +4,19 @@ import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
-from django.db.models import Count, Q
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from ...pacientes.models import Paciente
-from ...procedimentos.models import Sessao
-from ..models import ProcedimentoExercicio, SessaoExercicio
+from ...procedimentos.models import Procedimento, Sessao
+from ...procedimentos.services.scheduling import (
+    create_session_for_procedimento,
+    find_schedule_conflict,
+)
+from ..models import ExercicioCatalogo, ProcedimentoExercicio, SessaoExercicio
 
 
 COLOR_RED = "red"
@@ -75,6 +81,15 @@ class MonthlyExerciseTrackingTable:
     days: list[MonthlyTrackingDay]
     groups: list[MonthlyExerciseGroup]
     last_session_id: int | None
+
+
+@dataclass(frozen=True)
+class MarkExerciseDayResult:
+    sessao: Sessao
+    sessao_exercicio: SessaoExercicio
+    created_session: bool
+    created_link: bool
+    target_date: date
 
 
 def parse_month_reference(month_value: str | date | None) -> date:
@@ -188,6 +203,41 @@ def build_monthly_exercise_tracking_table(
     )
 
 
+@transaction.atomic
+def mark_exercise_day_for_patient(
+    paciente: Paciente,
+    *,
+    exercise_id: int,
+    target_date: date,
+) -> MarkExerciseDayResult:
+    """Mark a patient exercise on a calendar day.
+
+    The exercise row must already belong to the patient's monthly table
+    universe: active ProcedimentoExercicio rows plus active SessaoExercicio
+    rows. This keeps the write path tied to the same patient/procedure context
+    used by the read model instead of creating unrelated exercise dashboards.
+    """
+
+    exercicio = ExercicioCatalogo.objects.select_related("categoria").get(pk=exercise_id)
+    procedimento = _get_tracking_procedure_for_exercise(paciente, exercicio)
+    procedimento_exercicio = _ensure_procedure_exercise(procedimento, exercicio)
+    session_status = _session_status_for_marked_date(target_date)
+    sessao, created_session = _get_or_create_session_for_date(procedimento, target_date, session_status)
+    sessao_exercicio, created_link = _get_or_create_session_exercise(
+        sessao,
+        procedimento_exercicio,
+        session_status,
+    )
+
+    return MarkExerciseDayResult(
+        sessao=sessao,
+        sessao_exercicio=sessao_exercicio,
+        created_session=created_session,
+        created_link=created_link,
+        target_date=target_date,
+    )
+
+
 def _get_last_session_exercise_ids(last_session: Sessao | None) -> set[int]:
     if last_session is None:
         return set()
@@ -258,6 +308,172 @@ def _get_session_exercise_dates_by_statuses(
         dates_by_exercise.setdefault(exercise_id, set()).update(fallback_dates_by_procedure[procedimento_id])
 
     return dates_by_exercise
+
+
+def _get_tracking_procedure_for_exercise(paciente: Paciente, exercicio: ExercicioCatalogo) -> Procedimento:
+    procedimento_exercicio = (
+        ProcedimentoExercicio.objects.select_related("procedimento")
+        .filter(
+            procedimento__paciente=paciente,
+            exercicio=exercicio,
+        )
+        .order_by("-procedimento__created_at", "-created_at", "-procedimento_id")
+        .first()
+    )
+    if procedimento_exercicio:
+        return procedimento_exercicio.procedimento
+
+    sessao_exercicio = (
+        SessaoExercicio.objects.select_related("sessao__procedimento")
+        .filter(
+            sessao__procedimento__paciente=paciente,
+            exercicio=exercicio,
+        )
+        .order_by("-sessao__data_hora", "-created_at", "-sessao__procedimento_id")
+        .first()
+    )
+    if sessao_exercicio:
+        return sessao_exercicio.sessao.procedimento
+
+    raise ValidationError("Este exercício não está vinculado a um procedimento ativo deste paciente.")
+
+
+def _ensure_procedure_exercise(procedimento: Procedimento, exercicio: ExercicioCatalogo) -> ProcedimentoExercicio:
+    existing = (
+        ProcedimentoExercicio.all_objects.filter(
+            procedimento=procedimento,
+            exercicio=exercicio,
+        )
+        .order_by("-is_active", "created_at", "pk")
+        .first()
+    )
+    if existing is None:
+        return ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+
+    if not existing.is_active:
+        existing.restore()
+    return existing
+
+
+def _get_or_create_session_for_date(
+    procedimento: Procedimento,
+    target_date: date,
+    desired_status: str,
+) -> tuple[Sessao, bool]:
+    start_datetime = _aware_month_boundary(target_date)
+    end_datetime = timezone.make_aware(
+        datetime.combine(target_date, time.max),
+        timezone.get_current_timezone(),
+    )
+    sessao = (
+        Sessao.objects.filter(
+            procedimento=procedimento,
+            data_hora__gte=start_datetime,
+            data_hora__lte=end_datetime,
+        )
+        .order_by("data_hora", "pk")
+        .first()
+    )
+
+    if sessao:
+        _sync_session_status_for_mark(sessao, desired_status)
+        return sessao, False
+
+    sessao = create_session_for_procedimento(
+        procedimento,
+        data_hora=_default_session_datetime_for_date(target_date),
+        duracao_minutos=60,
+        status=desired_status,
+        observacoes="Criada pelo controle mensal de exercícios.",
+    )
+    return sessao, True
+
+
+def _sync_session_status_for_mark(sessao: Sessao, desired_status: str) -> None:
+    if desired_status == Sessao.STATUS_REALIZADA and sessao.status != Sessao.STATUS_REALIZADA:
+        sessao.status = Sessao.STATUS_REALIZADA
+    elif desired_status == Sessao.STATUS_AGENDADA and sessao.status not in GRID_SESSION_STATUSES:
+        sessao.status = Sessao.STATUS_AGENDADA
+    else:
+        return
+
+    sessao.save(update_fields=["status", "updated_at"])
+
+
+def _get_or_create_session_exercise(
+    sessao: Sessao,
+    procedimento_exercicio: ProcedimentoExercicio,
+    session_status: str,
+) -> tuple[SessaoExercicio, bool]:
+    existing = (
+        SessaoExercicio.all_objects.filter(
+            sessao=sessao,
+            exercicio=procedimento_exercicio.exercicio,
+        )
+        .order_by("-is_active", "created_at", "pk")
+        .first()
+    )
+    exercise_status = _exercise_status_for_session_status(session_status)
+
+    if existing:
+        update_fields = []
+        if not existing.is_active:
+            existing.is_active = True
+            existing.deleted_at = None
+            update_fields.extend(["is_active", "deleted_at"])
+        if existing.status != exercise_status:
+            existing.status = exercise_status
+            update_fields.append("status")
+        if update_fields:
+            update_fields.append("updated_at")
+            existing.save(update_fields=update_fields)
+        return existing, False
+
+    next_order = (
+        SessaoExercicio.all_objects.filter(sessao=sessao, is_active=True).aggregate(max_order=Max("ordem"))[
+            "max_order"
+        ]
+        or 0
+    ) + 1
+    return (
+        SessaoExercicio.objects.create(
+            sessao=sessao,
+            exercicio=procedimento_exercicio.exercicio,
+            ordem=next_order,
+            series=procedimento_exercicio.series,
+            repeticoes=procedimento_exercicio.repeticoes,
+            frequencia=procedimento_exercicio.frequencia,
+            progressao=procedimento_exercicio.progressao,
+            observacoes=procedimento_exercicio.observacoes,
+            status=exercise_status,
+        ),
+        True,
+    )
+
+
+def _session_status_for_marked_date(target_date: date) -> str:
+    if target_date <= timezone.localdate():
+        return Sessao.STATUS_REALIZADA
+    return Sessao.STATUS_AGENDADA
+
+
+def _exercise_status_for_session_status(session_status: str) -> str:
+    if session_status == Sessao.STATUS_REALIZADA:
+        return SessaoExercicio.STATUS_CONCLUIDO
+    return SessaoExercicio.STATUS_PLANEJADO
+
+
+def _default_session_datetime_for_date(target_date: date) -> datetime:
+    duration_minutes = 60
+    for hour in range(8, 20):
+        candidate = timezone.make_aware(
+            datetime.combine(target_date, time(hour=hour)),
+            timezone.get_current_timezone(),
+        )
+        if find_schedule_conflict(start=candidate, duration_minutes=duration_minutes) is None:
+            return candidate
+
+    raise ValidationError("Não há horário livre para criar uma sessão neste dia.")
 
 
 def _get_last_performed_dates_by_exercise(paciente: Paciente) -> dict[int, date]:
@@ -411,6 +627,8 @@ __all__ = [
     "MonthlyExerciseGroup",
     "MonthlyExerciseRow",
     "MonthlyExerciseTrackingTable",
+    "MarkExerciseDayResult",
     "build_monthly_exercise_tracking_table",
+    "mark_exercise_day_for_patient",
     "parse_month_reference",
 ]

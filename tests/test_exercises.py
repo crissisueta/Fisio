@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from forms.exercicios.services.monthly_tracking import (
     DAY_PAST,
     DAY_TODAY,
     build_monthly_exercise_tracking_table,
+    mark_exercise_day_for_patient,
 )
 from forms.models import ProcedimentoExercicio, Sessao, SessaoExercicio
 
@@ -151,6 +153,80 @@ class ExerciseTests(RegressionBaseTestCase):
         exercise_count = sum(len(group.exercises) for group in table.groups)
         self.assertEqual(exercise_count, 12)
         self.assertLessEqual(len(captured), 8)
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_mark_exercise_day_creates_completed_session_and_marks_table(self, _mock_localdate):
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        exercicio = self.create_exercicio(nome="Marcado pelo controle mensal")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+
+        result = mark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercicio.pk,
+            target_date=date(2026, 5, 3),
+        )
+
+        self.assertTrue(result.created_session)
+        self.assertTrue(result.created_link)
+        self.assertEqual(result.sessao.procedimento, procedimento)
+        self.assertEqual(timezone.localtime(result.sessao.data_hora).date(), date(2026, 5, 3))
+        self.assertEqual(result.sessao.status, Sessao.STATUS_REALIZADA)
+        self.assertEqual(result.sessao_exercicio.status, SessaoExercicio.STATUS_CONCLUIDO)
+
+        table = build_monthly_exercise_tracking_table(paciente, "2026-05")
+        row = self.exercise_rows_by_name(table)["Marcado pelo controle mensal"]
+        self.assertEqual(self.performed_days(row), [3])
+        self.assertEqual(row.color_state, COLOR_RED)
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_mark_exercise_day_creates_scheduled_session_for_future_day(self, _mock_localdate):
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        exercicio = self.create_exercicio(nome="Agendado pelo controle mensal")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+
+        result = mark_exercise_day_for_patient(
+            paciente,
+            exercise_id=exercicio.pk,
+            target_date=date(2026, 5, 12),
+        )
+
+        self.assertEqual(result.sessao.status, Sessao.STATUS_AGENDADA)
+        self.assertEqual(result.sessao_exercicio.status, SessaoExercicio.STATUS_PLANEJADO)
+
+        table = build_monthly_exercise_tracking_table(paciente, "2026-05")
+        row = self.exercise_rows_by_name(table)["Agendado pelo controle mensal"]
+        self.assertEqual(self.performed_days(row), [12])
+        self.assertEqual(row.color_state, COLOR_BLACK)
+
+    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_patient_exercise_day_mark_endpoint_is_patient_scoped(self, _mock_localdate):
+        user = self.create_user()
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        exercicio = self.create_exercicio(nome="Marcado via endpoint")
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("patient-exercise-day-mark", args=[paciente.pk]),
+            data=json.dumps({"exercise_id": exercicio.pk, "date": "2026-05-04"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["exercise_id"], exercicio.pk)
+        self.assertEqual(payload["date"], "2026-05-04")
+        self.assertTrue(
+            SessaoExercicio.objects.filter(
+                sessao__procedimento=procedimento,
+                exercicio=exercicio,
+                sessao__status=Sessao.STATUS_REALIZADA,
+            ).exists()
+        )
 
     @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_detail_injects_presented_monthly_tracking_for_requested_month(self, _mock_localdate):
