@@ -1,6 +1,6 @@
 """Compatibility exports for the moved exercise history service."""
 
-from ..exercicios.services.history import (
+from exercicios.services.history import (
     STATUS_BLUE,
     STATUS_NORMAL,
     STATUS_RED,

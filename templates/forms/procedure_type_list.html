@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">Gerencie os tipos disponíveis para criar procedimentos terapêuticos.</p>
     </div>
     <div class="col-md-4 text-md-end">
-        {% if perms.forms.add_tipoprocedimento %}
+        {% if perms.procedimentos.add_tipoprocedimento %}
         <a href="{% url 'procedure-type-create' %}" class="btn btn-success">+ Novo Tipo</a>
         {% endif %}
     </div>
@@ -69,10 +69,10 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-custom" role="group">
-                        {% if perms.forms.change_tipoprocedimento %}
+                        {% if perms.procedimentos.change_tipoprocedimento %}
                         <a href="{% url 'procedure-type-update' tipo.pk %}" class="btn btn-sm btn-warning">Editar</a>
                         {% endif %}
-                        {% if perms.forms.delete_tipoprocedimento and tipo.is_active %}
+                        {% if perms.procedimentos.delete_tipoprocedimento and tipo.is_active %}
                         <a href="{% url 'procedure-type-delete' tipo.pk %}" class="btn btn-sm btn-danger">Desativar</a>
                         {% endif %}
                     </div>

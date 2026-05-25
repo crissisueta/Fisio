@@ -1,14 +1,14 @@
 """Compatibility exports for legacy `forms.views` imports."""
 
-from .avaliacoes.views import (
+from avaliacoes.views import (
     AvaliacaoCreateView,
     AvaliacaoDeleteView,
     AvaliacaoDetailView,
     AvaliacaoListView,
     AvaliacaoUpdateView,
 )
-from .core.mixins import InternalPermissionMixin
-from .exercicios.views import (
+from core.mixins import InternalPermissionMixin
+from exercicios.views import (
     CategoriaExercicioCreateView,
     CategoriaExercicioDeleteView,
     CategoriaExercicioListView,
@@ -19,7 +19,7 @@ from .exercicios.views import (
     ExercicioCatalogoUpdateView,
     update_sessao_exercicios,
 )
-from .pacientes.views import (
+from pacientes.views import (
     PacienteCreateView,
     PacienteDeleteView,
     PacienteDetailView,
@@ -27,10 +27,10 @@ from .pacientes.views import (
     PacienteUpdateView,
     get_paciente_data,
 )
-from .painel.views import DashboardView
-from .procedimentos.views.calendar import CalendarDashboardView, calendar_events
-from .procedimentos.views.mixins import ProcedureCreateFlowMixin
-from .procedimentos.views.procedimentos import (
+from painel.views import DashboardView
+from procedimentos.views.calendar import CalendarDashboardView, calendar_events
+from procedimentos.views.mixins import ProcedureCreateFlowMixin
+from procedimentos.views.procedimentos import (
     ProcedimentoBulkScheduleView,
     ProcedimentoCreateView,
     ProcedimentoDeleteView,
@@ -43,7 +43,7 @@ from .procedimentos.views.procedimentos import (
     TipoProcedimentoUpdateView,
     toggle_procedimento_concluido,
 )
-from .procedimentos.views.sessoes import add_sessao, edit_sessao, update_status_sessao
+from procedimentos.views.sessoes import add_sessao, edit_sessao, update_status_sessao
 
 
 __all__ = [

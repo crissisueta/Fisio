@@ -1,6 +1,6 @@
 """Compatibility exports for the moved scheduling service."""
 
-from ..procedimentos.services.scheduling import (
+from procedimentos.services.scheduling import (
     BulkSessionGenerationResult,
     ScheduleConflict,
     WEEKDAY_CHOICES,

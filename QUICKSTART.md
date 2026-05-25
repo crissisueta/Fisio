@@ -7,6 +7,7 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 # .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
+cp .env.example .env
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver

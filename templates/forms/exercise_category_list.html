@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">Organize o catálogo de exercícios por categorias administrativas.</p>
     </div>
     <div class="col-md-4 text-md-end">
-        {% if perms.forms.add_categoriaexercicio %}
+        {% if perms.exercicios.add_categoriaexercicio %}
         <a href="{% url 'exercise-category-create' %}" class="btn btn-success">+ Nova Categoria</a>
         {% endif %}
     </div>
@@ -63,10 +63,10 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-custom" role="group">
-                        {% if perms.forms.change_categoriaexercicio %}
+                        {% if perms.exercicios.change_categoriaexercicio %}
                         <a href="{% url 'exercise-category-update' categoria.pk %}" class="btn btn-sm btn-warning">Editar</a>
                         {% endif %}
-                        {% if perms.forms.delete_categoriaexercicio and categoria.is_active %}
+                        {% if perms.exercicios.delete_categoriaexercicio and categoria.is_active %}
                         <a href="{% url 'exercise-category-delete' categoria.pk %}" class="btn btn-sm btn-danger">Desativar</a>
                         {% endif %}
                     </div>

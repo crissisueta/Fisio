@@ -7,7 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from forms.exercicios.services.monthly_tracking import (
+from exercicios.services.monthly_tracking import (
     COLOR_BLACK,
     COLOR_BLUE,
     COLOR_RED,
@@ -52,7 +52,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(assigned.series, "3")
         self.assertTrue(sessao.sessao_exercicios.filter(pk=assigned.pk).exists())
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_monthly_tracking_color_states_are_computed_from_patient_history(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -82,7 +82,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(rows["Exercicio azul"].color_state, COLOR_BLUE)
         self.assertEqual(rows["Exercicio preto"].color_state, COLOR_BLACK)
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_monthly_tracking_changes_performed_days_when_month_changes(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -100,7 +100,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(self.performed_days(self.exercise_rows_by_name(april_table)["Ponte"]), [10])
         self.assertEqual(self.performed_days(self.exercise_rows_by_name(may_table)["Ponte"]), [2])
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_monthly_tracking_marks_scheduled_session_exercises(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -126,7 +126,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(self.performed_days(rows["Marcado na sessao"]), [8])
         self.assertEqual(self.performed_days(rows["Planejado no procedimento"]), [9])
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_monthly_tracking_classifies_past_today_and_future_days(self, _mock_localdate):
         paciente = self.create_paciente()
         table = build_monthly_exercise_tracking_table(paciente, "2026-05")
@@ -136,7 +136,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(days[6], DAY_TODAY)
         self.assertEqual(days[7], DAY_FUTURE)
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_monthly_tracking_uses_fixed_number_of_queries(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -155,7 +155,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(exercise_count, 12)
         self.assertLessEqual(len(captured), 8)
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_mark_exercise_day_creates_completed_session_and_marks_table(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -180,7 +180,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(self.performed_days(row), [3])
         self.assertEqual(row.color_state, COLOR_RED)
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_mark_exercise_day_creates_scheduled_session_for_future_day(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -201,7 +201,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(self.performed_days(row), [12])
         self.assertEqual(row.color_state, COLOR_BLACK)
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_unmark_exercise_day_removes_table_created_mark(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -226,7 +226,7 @@ class ExerciseTests(RegressionBaseTestCase):
         row = self.exercise_rows_by_name(table)["Desmarcado pelo controle mensal"]
         self.assertEqual(self.performed_days(row), [])
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_unmark_fallback_session_materializes_remaining_exercises(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
@@ -248,7 +248,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(self.performed_days(rows["Remover do fallback"]), [])
         self.assertEqual(self.performed_days(rows["Manter no fallback"]), [5])
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_exercise_day_mark_endpoint_is_patient_scoped(self, _mock_localdate):
         user = self.create_user()
         paciente = self.create_paciente()
@@ -276,7 +276,7 @@ class ExerciseTests(RegressionBaseTestCase):
             ).exists()
         )
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_exercise_day_endpoint_unmarks_existing_mark(self, _mock_localdate):
         user = self.create_user()
         paciente = self.create_paciente()
@@ -308,7 +308,7 @@ class ExerciseTests(RegressionBaseTestCase):
             ).exists()
         )
 
-    @patch("forms.exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_detail_injects_presented_monthly_tracking_for_requested_month(self, _mock_localdate):
         user = self.create_user()
         paciente = self.create_paciente()

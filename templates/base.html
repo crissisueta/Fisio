@@ -66,15 +66,15 @@
                 <a href="{% url 'avaliacao-list' %}" class="{% if 'avaliacao' in request.resolver_match.url_name %}active{% endif %}">Avaliações</a>
                 <a href="{% url 'procedure-list' %}" class="{% if 'procedure' in request.resolver_match.url_name and 'procedure-type' not in request.resolver_match.url_name %}active{% endif %}">Procedimentos</a>
 
-                {% if perms.forms.view_exerciciocatalogo or perms.forms.view_categoriaexercicio or perms.forms.view_tipoprocedimento %}
+                {% if perms.exercicios.view_exerciciocatalogo or perms.exercicios.view_categoriaexercicio or perms.procedimentos.view_tipoprocedimento %}
                 <h6 class="px-3 pt-3 pb-2 text-muted">Cadastros</h6>
-                {% if perms.forms.view_exerciciocatalogo %}
+                {% if perms.exercicios.view_exerciciocatalogo %}
                 <a href="{% url 'exercise-list' %}" class="{% if 'exercise-' in request.resolver_match.url_name and 'category' not in request.resolver_match.url_name %}active{% endif %}">Exercícios</a>
                 {% endif %}
-                {% if perms.forms.view_categoriaexercicio %}
+                {% if perms.exercicios.view_categoriaexercicio %}
                 <a href="{% url 'exercise-category-list' %}" class="{% if 'exercise-category' in request.resolver_match.url_name %}active{% endif %}">Categorias de Exercícios</a>
                 {% endif %}
-                {% if perms.forms.view_tipoprocedimento %}
+                {% if perms.procedimentos.view_tipoprocedimento %}
                 <a href="{% url 'procedure-type-list' %}" class="{% if 'procedure-type' in request.resolver_match.url_name %}active{% endif %}">Tipos de Procedimento</a>
                 {% endif %}
                 {% endif %}

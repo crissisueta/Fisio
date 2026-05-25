@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">Cadastre e mantenha o catálogo de exercícios usado nos procedimentos.</p>
     </div>
     <div class="col-md-4 text-md-end">
-        {% if perms.forms.add_exerciciocatalogo %}
+        {% if perms.exercicios.add_exerciciocatalogo %}
         <a href="{% url 'exercise-create' %}" class="btn btn-success">+ Novo Exercício</a>
         {% endif %}
     </div>
@@ -82,10 +82,10 @@
                 <td>{{ exercicio.created_at|date:"d/m/Y H:i" }}</td>
                 <td>
                     <div class="btn-group btn-group-custom" role="group">
-                        {% if perms.forms.change_exerciciocatalogo %}
+                        {% if perms.exercicios.change_exerciciocatalogo %}
                         <a href="{% url 'exercise-update' exercicio.pk %}" class="btn btn-sm btn-warning">Editar</a>
                         {% endif %}
-                        {% if perms.forms.delete_exerciciocatalogo and exercicio.is_active %}
+                        {% if perms.exercicios.delete_exerciciocatalogo and exercicio.is_active %}
                         <a href="{% url 'exercise-delete' exercicio.pk %}" class="btn btn-sm btn-danger">Desativar</a>
                         {% endif %}
                     </div>

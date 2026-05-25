@@ -1,38 +1,46 @@
-"""
-Django settings for fisio_project project.
-"""
-
+import os
 from pathlib import Path
 
-# load local environment variables from env/Fisio.env when present
-# this lets developers run the project locally without editing settings.py
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
+
 try:
     from dotenv import load_dotenv
 except ImportError:
     load_dotenv = None
 
-if load_dotenv:
-    base_dir = Path(__file__).resolve().parent.parent
-    env_path = base_dir / 'env' / 'Fisio.env'
-    if env_path.exists():
-        load_dotenv(env_path)
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+if load_dotenv:
+    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR / "env" / "Fisio.env")
 
-# SECURITY WARNING: keep the secret key used in production secret!
-import os
+
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name, default=""):
+    value = os.environ.get(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEBUG = env_bool("DEBUG", default=False)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-local-development-key-change-me"
+    else:
+        raise ImproperlyConfigured("Set DJANGO_SECRET_KEY in the environment.")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG") == "True"
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "127.0.0.1,localhost")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
-
-
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -41,7 +49,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'forms',
+    'core.apps.CoreConfig',
+    'pacientes.apps.PacientesConfig',
+    'avaliacoes.apps.AvaliacoesConfig',
+    'procedimentos.apps.ProcedimentosConfig',
+    'exercicios.apps.ExerciciosConfig',
+    'painel.apps.PainelConfig',
 ]
 
 MIDDLEWARE = [
@@ -74,15 +87,10 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'fisio_project.wsgi.application'
+ASGI_APPLICATION = 'fisio_project.asgi.application'
 
-
-# Database
-
-import dj_database_url
 
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
-
-# Railway Postgres requires SSL in production; SQLite should not use SSL.
 DATABASES = {
     'default': dj_database_url.parse(
         DATABASE_URL,
@@ -119,23 +127,26 @@ USE_I18N = True
 
 USE_TZ = True
 
-# Email backend
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 
-
-# Static files (CSS, JavaScript, Images)
-
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# Default primary key field type
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Authentication redirects
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = 'login'
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
