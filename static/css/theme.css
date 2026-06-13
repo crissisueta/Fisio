@@ -1,0 +1,75 @@
+:root {
+    --app-primary: #fd790d;
+    --app-primary-rgb: 13, 110, 253;
+    --app-primary-hover: #d4d70b;
+    --app-primary-hover-rgb: 11, 94, 215;
+    --app-primary-active: #cab00a;
+    --app-primary-contrast: #fff;
+
+    --bs-primary: var(--app-primary);
+    --bs-primary-rgb: var(--app-primary-rgb);
+    --bs-link-color: var(--app-primary);
+    --bs-link-color-rgb: var(--app-primary-rgb);
+    --bs-link-hover-color: var(--app-primary-hover);
+    --bs-link-hover-color-rgb: var(--app-primary-hover-rgb);
+}
+
+.bg-primary {
+    background-color: var(--app-primary) !important;
+}
+
+.text-primary {
+    color: var(--app-primary) !important;
+}
+
+.border-primary {
+    border-color: var(--app-primary) !important;
+}
+
+.btn-primary {
+    --bs-btn-color: var(--app-primary-contrast);
+    --bs-btn-bg: var(--app-primary);
+    --bs-btn-border-color: var(--app-primary);
+    --bs-btn-hover-color: var(--app-primary-contrast);
+    --bs-btn-hover-bg: var(--app-primary-hover);
+    --bs-btn-hover-border-color: var(--app-primary-hover);
+    --bs-btn-focus-shadow-rgb: var(--app-primary-rgb);
+    --bs-btn-active-color: var(--app-primary-contrast);
+    --bs-btn-active-bg: var(--app-primary-active);
+    --bs-btn-active-border-color: var(--app-primary-active);
+    --bs-btn-disabled-color: var(--app-primary-contrast);
+    --bs-btn-disabled-bg: var(--app-primary);
+    --bs-btn-disabled-border-color: var(--app-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--app-primary);
+    --bs-btn-border-color: var(--app-primary);
+    --bs-btn-hover-color: var(--app-primary-contrast);
+    --bs-btn-hover-bg: var(--app-primary);
+    --bs-btn-hover-border-color: var(--app-primary);
+    --bs-btn-focus-shadow-rgb: var(--app-primary-rgb);
+    --bs-btn-active-color: var(--app-primary-contrast);
+    --bs-btn-active-bg: var(--app-primary);
+    --bs-btn-active-border-color: var(--app-primary);
+    --bs-btn-disabled-color: var(--app-primary);
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: var(--app-primary);
+}
+
+.form-check-input:checked {
+    background-color: var(--app-primary);
+    border-color: var(--app-primary);
+}
+
+.form-check-input:focus {
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--app-primary-rgb), 0.25);
+}
+
+.dropdown-item.active,
+.dropdown-item:active,
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+    background-color: var(--app-primary);
+}

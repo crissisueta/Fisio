@@ -6,9 +6,10 @@ from core.utils.datetime import ensure_aware_datetime
 from ..models import Sessao
 
 
-COR_PADRAO_PROCEDIMENTO = "#0d6efd"
+COR_PRINCIPAL_TEMA = "var(--app-primary)"
+COR_PADRAO_PROCEDIMENTO = COR_PRINCIPAL_TEMA
 CORES_TIPO_PROCEDIMENTO = {
-    "fisioterapia": "#0d6efd",
+    "fisioterapia": COR_PRINCIPAL_TEMA,
     "acupuntura": "#6f42c1",
     "drenagem linfatica": "#20c997",
     "pilates": "#fd7e14",
@@ -54,4 +55,3 @@ def build_calendar_events():
         )
 
     return events
-
