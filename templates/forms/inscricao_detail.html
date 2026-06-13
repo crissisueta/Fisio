@@ -159,29 +159,44 @@
     }
     .patient-info-drawer .collapse,
     .patient-info-drawer .collapsing { border-top: 1px solid #e9ecef; }
+    @media (max-width: 767.98px) {
+        .exercise-tracking-card {
+            min-height: 0;
+        }
+        .exercise-tracking-table-wrap {
+            max-height: 70vh;
+        }
+        .exercise-tracking-name-col {
+            max-width: 135px;
+            min-width: 135px;
+            width: 135px;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-10"><h1>{{ ficha.nome }}</h1></div>
-    <div class="col-md-2 text-end">
-        <div class="btn-group" role="group">
-            <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-warning">Editar</a>
-            <a href="{% url 'inscricao-list' %}" class="btn btn-secondary">Voltar</a>
+    <div class="col-md-8"><h1>{{ ficha.nome }}</h1></div>
+    <div class="col-md-4 text-md-end">
+        <div class="d-flex justify-content-md-end gap-2 flex-wrap">
+            <div class="btn-group" role="group">
+                <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-warning">Editar</a>
+                <a href="{% url 'inscricao-list' %}" class="btn btn-secondary">Voltar</a>
+            </div>
+            <button
+                type="button"
+                class="btn btn-outline-secondary exercise-color-help-button"
+                aria-label="Regras de cores dos exercícios"
+                data-bs-toggle="popover"
+                data-bs-placement="left"
+                data-bs-title="Cores dos exercícios"
+                data-bs-html="true"
+                data-bs-content="<strong>Vermelho:</strong> realizado na última sessão concluída.<br><strong>Azul:</strong> último uso há mais de 30 dias.<br><strong>Preto:</strong> nunca realizado, ou realizado há menos de 30 dias e não na última sessão.<br><span class='text-muted'>Apenas sessões realizadas contam para as cores.</span>"
+            >
+                ?
+            </button>
         </div>
-        <button
-            type="button"
-            class="btn btn-outline-secondary exercise-color-help-button ms-2"
-            aria-label="Regras de cores dos exercícios"
-            data-bs-toggle="popover"
-            data-bs-placement="left"
-            data-bs-title="Cores dos exercícios"
-            data-bs-html="true"
-            data-bs-content="<strong>Vermelho:</strong> realizado na última sessão concluída.<br><strong>Azul:</strong> último uso há mais de 30 dias.<br><strong>Preto:</strong> nunca realizado, ou realizado há menos de 30 dias e não na última sessão.<br><span class='text-muted'>Apenas sessões realizadas contam para as cores.</span>"
-        >
-            ?
-        </button>
     </div>
 </div>
 

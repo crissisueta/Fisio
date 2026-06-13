@@ -34,7 +34,7 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="/">Fisioterapia</a>
             {% if user.is_authenticated %}
-            <button class="btn btn-outline-light" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
+            <button class="btn btn-outline-light d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir menu">
                 <span class="navbar-toggler-icon"></span>
             </button>
             {% endif %}
@@ -54,10 +54,10 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
+    <div class="container-fluid app-container">
+        <div class="row app-shell">
             {% if user.is_authenticated %}
-            <div class="col-md-3 sidebar collapse show" id="sidebar">
+            <div class="col-12 col-md-3 sidebar app-sidebar collapse" id="sidebar">
                 <h5 class="px-3 py-3 border-bottom">Menu</h5>
                 <a href="/" class="{% if request.resolver_match.url_name == 'index' %}active{% endif %}">Painel</a>
                 <a href="{% url 'calendar-dashboard' %}" class="{% if 'calendar' in request.resolver_match.url_name %}active{% endif %}">Calendário</a>
@@ -82,7 +82,7 @@
             </div>
             {% endif %}
 
-            <div class="{% if user.is_authenticated %}col-md-9{% else %}col-md-12{% endif %} main-content">
+            <div class="{% if user.is_authenticated %}col-12 col-md-9{% else %}col-12{% endif %} main-content app-main">
                 {% if messages %}
                     {% for message in messages %}
                         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">

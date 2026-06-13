@@ -14,6 +14,24 @@
     .event-status-dot.complete { background-color: #198754; }
     .event-status-dot.incomplete { background-color: #ffc107; }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    @media (max-width: 767.98px) {
+        .fc .fc-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .fc .fc-toolbar-chunk {
+            display: flex;
+            justify-content: center;
+        }
+        .fc .fc-toolbar-title {
+            font-size: 1.25rem;
+            text-align: center;
+        }
+        .fc .fc-button {
+            padding: 0.35rem 0.55rem;
+        }
+    }
 </style>
 {% endblock %}
 
