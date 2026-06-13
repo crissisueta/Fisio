@@ -1,9 +1,9 @@
 :root {
-    --app-primary: #fd790d;
+    --app-primary: #0d6efd;
     --app-primary-rgb: 13, 110, 253;
-    --app-primary-hover: #d4d70b;
+    --app-primary-hover: #0b5ed7;
     --app-primary-hover-rgb: 11, 94, 215;
-    --app-primary-active: #cab00a;
+    --app-primary-active: #0a58ca;
     --app-primary-contrast: #fff;
 
     --bs-primary: var(--app-primary);
