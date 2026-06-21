@@ -1,0 +1,131 @@
+{% if user.is_authenticated %}
+<div class="feedback-widget" data-feedback-widget>
+    <button class="feedback-tab" type="button" data-feedback-toggle aria-controls="feedback-panel" aria-expanded="false">
+        {{ feedback_tab_text }}
+    </button>
+    <div class="feedback-panel" id="feedback-panel" data-feedback-panel hidden>
+        <form class="feedback-form" method="post" action="{% url 'feedback-submit' %}" data-feedback-form>
+            {% csrf_token %}
+            <input type="hidden" name="source_page" value="{{ request.get_full_path }}" data-feedback-source>
+            <div class="feedback-honeypot" aria-hidden="true">
+                <label for="feedback-website">Website</label>
+                <input id="feedback-website" type="text" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="feedback-type">Tipo</label>
+                <select class="form-select form-select-sm" id="feedback-type" name="feedback_type">
+                    <option value="bug">Erro</option>
+                    <option value="suggestion">Sugestao</option>
+                </select>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="feedback-message">Mensagem</label>
+                <textarea class="form-control form-control-sm" id="feedback-message" name="message" rows="4" maxlength="4000" required data-feedback-message></textarea>
+            </div>
+
+            <div class="feedback-status small mb-2" role="status" aria-live="polite" data-feedback-status></div>
+
+            <div class="d-flex gap-2 justify-content-end">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-feedback-close>Fechar</button>
+                <button class="btn btn-sm btn-primary" type="submit" data-feedback-submit>Enviar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var widget = document.querySelector("[data-feedback-widget]");
+        if (!widget) {
+            return;
+        }
+
+        var toggle = widget.querySelector("[data-feedback-toggle]");
+        var panel = widget.querySelector("[data-feedback-panel]");
+        var closeButton = widget.querySelector("[data-feedback-close]");
+        var form = widget.querySelector("[data-feedback-form]");
+        var message = widget.querySelector("[data-feedback-message]");
+        var source = widget.querySelector("[data-feedback-source]");
+        var status = widget.querySelector("[data-feedback-status]");
+        var submitButton = widget.querySelector("[data-feedback-submit]");
+
+        function setStatus(text, state) {
+            status.textContent = text || "";
+            status.className = "feedback-status small mb-2";
+            if (state) {
+                status.classList.add("is-" + state);
+            }
+        }
+
+        function setOpen(isOpen) {
+            widget.classList.toggle("is-open", isOpen);
+            panel.hidden = !isOpen;
+            toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            if (isOpen) {
+                source.value = window.location.href;
+                window.setTimeout(function () {
+                    message.focus();
+                }, 0);
+            }
+        }
+
+        toggle.addEventListener("click", function () {
+            setOpen(panel.hidden);
+        });
+
+        closeButton.addEventListener("click", function () {
+            setOpen(false);
+            toggle.focus();
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !panel.hidden) {
+                setOpen(false);
+                toggle.focus();
+            }
+        });
+
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            source.value = window.location.href;
+            setStatus("Enviando...", "pending");
+            submitButton.disabled = true;
+
+            fetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            })
+                .then(function (response) {
+                    return response.json().then(function (payload) {
+                        return {
+                            ok: response.ok && payload.ok,
+                            payload: payload
+                        };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        throw new Error(result.payload.message || "Nao foi possivel enviar.");
+                    }
+                    form.reset();
+                    setStatus(result.payload.message || "Feedback enviado.", "success");
+                    window.setTimeout(function () {
+                        setOpen(false);
+                        setStatus("");
+                    }, 1400);
+                })
+                .catch(function (error) {
+                    setStatus(error.message || "Nao foi possivel enviar.", "error");
+                })
+                .finally(function () {
+                    submitButton.disabled = false;
+                });
+        });
+    }());
+</script>
+{% endif %}

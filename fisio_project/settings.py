@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -28,6 +29,13 @@ def env_list(name, default=""):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def env_int(name, default=0):
+    value = os.environ.get(name)
+    if value in (None, ""):
+        return default
+    return int(value)
+
+
 DEBUG = env_bool("DEBUG", default=False)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or os.environ.get("SECRET_KEY")
@@ -54,6 +62,7 @@ INSTALLED_APPS = [
     'avaliacoes.apps.AvaliacoesConfig',
     'procedimentos.apps.ProcedimentosConfig',
     'exercicios.apps.ExerciciosConfig',
+    'importacao.apps.ImportacaoConfig',
     'painel.apps.PainelConfig',
 ]
 
@@ -81,6 +90,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.feedback_settings',
             ],
         },
     },
@@ -128,6 +138,18 @@ USE_I18N = True
 USE_TZ = True
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = env_int("EMAIL_PORT", 25)
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", default=False)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "webmaster@localhost")
+
+FEEDBACK_EMAIL_TO = os.environ.get("FEEDBACK_EMAIL_TO", "")
+FEEDBACK_EMAIL_SUBJECT_PREFIX = os.environ.get("FEEDBACK_EMAIL_SUBJECT_PREFIX", "[Fisio Feedback]")
+FEEDBACK_TAB_TEXT = os.environ.get("FEEDBACK_TAB_TEXT", "Reportar erro")
+FEEDBACK_INCLUDE_METADATA = env_bool("FEEDBACK_INCLUDE_METADATA", default=True)
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -142,11 +164,15 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = 'login'
 
+STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+if DEBUG or "test" in sys.argv:
+    STATICFILES_STORAGE_BACKEND = "django.contrib.staticfiles.storage.StaticFilesStorage"
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": STATICFILES_STORAGE_BACKEND,
     },
 }

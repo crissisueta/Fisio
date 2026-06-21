@@ -144,6 +144,85 @@
     opacity: 1;
 }
 
+.feedback-widget {
+    position: fixed;
+    right: 0;
+    bottom: 2.75rem;
+    z-index: 1090;
+}
+
+.feedback-tab {
+    position: fixed;
+    right: 0;
+    bottom: 2.75rem;
+    max-width: calc(100vw - 1rem);
+    transform: translateX(0);
+    border: 1px solid var(--app-primary);
+    border-right: 0;
+    border-radius: 0.35rem 0 0 0.35rem;
+    background: var(--app-primary);
+    color: var(--app-primary-contrast);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.6rem 0.75rem;
+    box-shadow: 0 0.25rem 0.8rem rgba(var(--app-primary-rgb), 0.34);
+    opacity: 0.96;
+    transition: opacity 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.feedback-widget.is-open .feedback-tab,
+.feedback-tab:hover,
+.feedback-tab:focus {
+    opacity: 1;
+    background: var(--app-primary-hover);
+    box-shadow: 0 0.35rem 1rem rgba(var(--app-primary-rgb), 0.42);
+}
+
+.feedback-panel {
+    position: fixed;
+    right: 0.75rem;
+    bottom: 5rem;
+    width: min(22rem, calc(100vw - 1.5rem));
+    border: 1px solid rgba(13, 110, 253, 0.18);
+    border-radius: 0.5rem;
+    background: #fff;
+    padding: 0.85rem;
+    box-shadow: 0 0.75rem 1.75rem rgba(33, 37, 41, 0.18);
+}
+
+.feedback-panel[hidden] {
+    display: none;
+}
+
+.feedback-honeypot {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.feedback-form textarea {
+    resize: vertical;
+}
+
+.feedback-status {
+    min-height: 1.25rem;
+}
+
+.feedback-status.is-pending {
+    color: #6c757d;
+}
+
+.feedback-status.is-success {
+    color: #198754;
+}
+
+.feedback-status.is-error {
+    color: #dc3545;
+}
+
 @media (min-width: 768px) {
     .app-sidebar.collapse {
         display: block !important;
@@ -266,6 +345,17 @@
         align-items: flex-start !important;
         min-height: calc(100vh - 96px);
         padding-top: 2rem;
+    }
+
+    .feedback-widget,
+    .feedback-tab {
+        bottom: 1.25rem;
+    }
+
+    .feedback-panel {
+        right: 0.5rem;
+        bottom: 3.4rem;
+        width: calc(100vw - 1rem);
     }
 }
 

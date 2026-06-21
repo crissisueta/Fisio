@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}Importar Planilha{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Importar Planilha</h1>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data" class="row g-3">
+            {% csrf_token %}
+            <div class="col-md-4">
+                <label for="{{ form.target.id_for_label }}" class="form-label">{{ form.target.label }}</label>
+                {{ form.target }}
+                {% if form.target.errors %}<div class="invalid-feedback d-block">{{ form.target.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-5">
+                <label for="{{ form.arquivo.id_for_label }}" class="form-label">{{ form.arquivo.label }}</label>
+                {{ form.arquivo }}
+                {% if form.arquivo.errors %}<div class="invalid-feedback d-block">{{ form.arquivo.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ form.sheet_name.id_for_label }}" class="form-label">{{ form.sheet_name.label }}</label>
+                {{ form.sheet_name }}
+                {% if form.sheet_name.errors %}<div class="invalid-feedback d-block">{{ form.sheet_name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-check">
+                    {{ form.update_existing }}
+                    <label for="{{ form.update_existing.id_for_label }}" class="form-check-label">{{ form.update_existing.label }}</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check">
+                    {{ form.create_related }}
+                    <label for="{{ form.create_related.id_for_label }}" class="form-check-label">{{ form.create_related.label }}</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check">
+                    {{ form.dry_run }}
+                    <label for="{{ form.dry_run.id_for_label }}" class="form-check-label">{{ form.dry_run.label }}</label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Processar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if result %}
+<div class="card">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <strong>Resultado{% if result.sheet_name %}: {{ result.sheet_name }}{% endif %}</strong>
+        <div class="d-flex gap-2">
+            <span class="badge text-bg-success">Criar: {{ result.created_count }}</span>
+            <span class="badge text-bg-primary">Atualizar: {{ result.updated_count }}</span>
+            <span class="badge text-bg-secondary">Pular: {{ result.skipped_count }}</span>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if result.errors %}
+            {% for error in result.errors %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endfor %}
+        {% endif %}
+
+        {% if result.rows %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Linha</th>
+                        <th>Ação</th>
+                        <th>Dados</th>
+                        <th>Erros</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in result.rows %}
+                    <tr>
+                        <td>{{ row.row_number }}</td>
+                        <td>
+                            {% if row.status == 'erro' %}
+                                <span class="badge text-bg-danger">erro</span>
+                            {% elif row.action == 'criar' %}
+                                <span class="badge text-bg-success">criar</span>
+                            {% elif row.action == 'atualizar' %}
+                                <span class="badge text-bg-primary">atualizar</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">pular</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for key, value in row.values.items %}
+                                <span class="d-inline-block me-3"><strong>{{ key }}:</strong> {{ value }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% for error in row.errors %}
+                                <div class="text-danger">{{ error }}</div>
+                            {% empty %}
+                                <span class="text-muted">-</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

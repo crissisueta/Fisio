@@ -10,6 +10,17 @@ class PageLoadTests(RegressionBaseTestCase):
         response = self.client.get(reverse("login"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'data-feedback-widget')
+
+    def test_feedback_widget_renders_for_authenticated_user(self):
+        user = self.create_user()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-feedback-widget')
+        self.assertContains(response, "Reportar erro")
 
     def test_core_logged_in_pages_load(self):
         user = self.create_user()
@@ -88,4 +99,3 @@ class PageLoadTests(RegressionBaseTestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
-
