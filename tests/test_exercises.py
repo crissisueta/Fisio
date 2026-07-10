@@ -327,6 +327,52 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertContains(response, "Controle no detalhe")
         self.assertContains(response, "X")
 
+    def test_patient_exercise_note_can_be_saved_beside_patient_name(self):
+        user = self.create_user()
+        paciente = self.create_paciente()
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("patient-exercise-note-update", args=[paciente.pk]),
+            {
+                "nota_exercicios": "Evitar impacto no joelho",
+                "month": "2026-05",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('inscricao-detail', args=[paciente.pk])}?month=2026-05",
+            fetch_redirect_response=False,
+        )
+        paciente.refresh_from_db()
+        self.assertEqual(paciente.nota_exercicios, "Evitar impacto no joelho")
+
+        detail_response = self.client.get(reverse("inscricao-detail", args=[paciente.pk]))
+        self.assertContains(detail_response, 'placeholder="Nota rápida"')
+        self.assertContains(detail_response, 'value="Evitar impacto no joelho"')
+        self.assertContains(detail_response, "data-exercise-note-input")
+        self.assertNotContains(detail_response, ">Salvar</button>")
+
+    def test_patient_exercise_note_ajax_save_returns_json(self):
+        user = self.create_user()
+        paciente = self.create_paciente()
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("patient-exercise-note-update", args=[paciente.pk]),
+            {"nota_exercicios": "Alongar antes"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"success": True, "nota_exercicios": "Alongar antes"},
+        )
+        paciente.refresh_from_db()
+        self.assertEqual(paciente.nota_exercicios, "Alongar antes")
+
     def create_completed_session(self, procedimento, when):
         return self.create_session_with_status(procedimento, when, Sessao.STATUS_REALIZADA)
 

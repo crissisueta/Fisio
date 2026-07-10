@@ -24,20 +24,32 @@ class SpreadsheetImportView(StaffOnlyMixin, FormView):
             create_related=form.cleaned_data["create_related"],
             dry_run=form.cleaned_data["dry_run"],
         )
-        result = import_uploaded_spreadsheet(
-            form.cleaned_data["arquivo"],
-            options,
-            sheet_name=form.cleaned_data["sheet_name"],
-        )
+        results = [
+            {
+                "filename": arquivo.name,
+                "result": import_uploaded_spreadsheet(
+                    arquivo,
+                    options,
+                    sheet_name=form.cleaned_data["sheet_name"],
+                ),
+            }
+            for arquivo in form.cleaned_data["arquivo"]
+        ]
 
-        if result.saved:
-            messages.success(self.request, "Importacao concluida.")
-        elif result.has_errors and not result.dry_run:
+        has_errors = any(item["result"].has_errors for item in results)
+        saved_count = sum(1 for item in results if item["result"].saved)
+        if options.dry_run:
+            if has_errors:
+                messages.warning(self.request, "A simulacao encontrou ajustes pendentes.")
+            else:
+                messages.info(self.request, "Simulacao concluida.")
+        elif has_errors and saved_count:
+            messages.warning(self.request, "Importacao concluida parcialmente.")
+        elif has_errors:
             messages.error(self.request, "Nenhum registro foi salvo.")
-        elif result.has_errors:
-            messages.warning(self.request, "A simulacao encontrou ajustes pendentes.")
+        elif saved_count:
+            messages.success(self.request, "Importacao concluida.")
         else:
-            messages.info(self.request, "Simulacao concluida.")
+            messages.info(self.request, "Nenhuma alteracao foi salva.")
 
-        return self.render_to_response(self.get_context_data(form=form, result=result))
-
+        return self.render_to_response(self.get_context_data(form=form, results=results))

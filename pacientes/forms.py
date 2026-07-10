@@ -39,3 +39,5 @@ class PacienteForm(forms.ModelForm):
             "observacoes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
 
+    def clean_cpf(self):
+        return self.cleaned_data.get("cpf") or None

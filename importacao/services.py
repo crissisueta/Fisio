@@ -6,14 +6,16 @@ from typing import Any, Callable
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from avaliacoes.models import Avaliacao, TipoAvaliacao
-from exercicios.models import CategoriaExercicio, ExercicioCatalogo
+from exercicios.models import CategoriaExercicio, ExercicioCatalogo, ProcedimentoExercicio, SessaoExercicio
 from pacientes.models import Paciente
 from procedimentos.models import Procedimento, Sessao, TipoProcedimento
+from procedimentos.services.scheduling import resequence_sessoes
 
-from .spreadsheets import SpreadsheetReadError, read_spreadsheet
+from .spreadsheets import SpreadsheetReadError, read_exercise_tracking_spreadsheet, read_spreadsheet
 
 
 TARGET_PATIENTS = "pacientes"
@@ -24,6 +26,7 @@ TARGET_EXERCISES = "exercicios"
 TARGET_PROCEDURES = "procedimentos"
 TARGET_EVALUATIONS = "avaliacoes"
 TARGET_SESSIONS = "sessoes"
+TARGET_EXERCISE_TRACKING = "historico_exercicios"
 
 TARGET_CHOICES = [
     (TARGET_PATIENTS, "Pacientes"),
@@ -34,11 +37,14 @@ TARGET_CHOICES = [
     (TARGET_PROCEDURES, "Procedimentos"),
     (TARGET_EVALUATIONS, "Avaliacoes"),
     (TARGET_SESSIONS, "Sessoes"),
+    (TARGET_EXERCISE_TRACKING, "Historico de Exercicios"),
 ]
 
 ACTION_CREATE = "criar"
 ACTION_UPDATE = "atualizar"
 ACTION_SKIP = "pular"
+TRACKING_IMPORT_PROCEDURE_TYPE_NAME = "Pilates"
+TRACKING_IMPORT_SESSION_OBSERVATION = "Criada pela importacao de historico de exercicios."
 
 
 @dataclass
@@ -153,6 +159,16 @@ COLUMN_ALIASES = {
     "assinatura_confirmada": "assinatura_confirmada",
     "categoria": "categoria",
     "categoria_exercicio": "categoria",
+    "exercicio": "exercicio",
+    "nome_exercicio": "exercicio",
+    "nome_do_exercicio": "exercicio",
+    "marca": "marca",
+    "marcacao": "marca",
+    "aba": "sheet_name",
+    "sheet": "sheet_name",
+    "sheet_name": "sheet_name",
+    "linha": "linha_origem",
+    "linha_origem": "linha_origem",
     "instrucoes": "instrucoes",
     "ativo": "ativo",
     "disponivel": "ativo",
@@ -163,7 +179,10 @@ COLUMN_ALIASES = {
 
 def import_uploaded_spreadsheet(uploaded_file, options: ImportOptions, sheet_name: str = "") -> ImportResult:
     try:
-        spreadsheet = read_spreadsheet(uploaded_file, sheet_name=sheet_name)
+        if options.target == TARGET_EXERCISE_TRACKING:
+            spreadsheet = read_exercise_tracking_spreadsheet(uploaded_file, sheet_name=sheet_name)
+        else:
+            spreadsheet = read_spreadsheet(uploaded_file, sheet_name=sheet_name)
     except SpreadsheetReadError as exc:
         return ImportResult(target=options.target, dry_run=options.dry_run, errors=[str(exc)])
 
@@ -209,6 +228,7 @@ def _importer_for_target(target: str):
         TARGET_PROCEDURES: _prepare_procedure,
         TARGET_EVALUATIONS: _prepare_evaluation,
         TARGET_SESSIONS: _prepare_session,
+        TARGET_EXERCISE_TRACKING: _prepare_exercise_tracking,
     }
     try:
         return importers[target]
@@ -498,6 +518,68 @@ def _prepare_session(row: dict[str, Any], row_number: int, options: ImportOption
     return PreparedOperation(ImportRowResult(row_number, action, display, errors), save=None if errors else save)
 
 
+def _prepare_exercise_tracking(row: dict[str, Any], row_number: int, options: ImportOptions, seen: dict[str, int]):
+    errors: list[str] = []
+    paciente = _resolve_tracking_patient(row, options, errors)
+    performed_date = _parse_date(row.get("data"), "data", errors)
+    categoria_nome = _text(row.get("categoria")) or "Sem categoria"
+    exercicio_nome = _required_text(row, "exercicio", errors)
+    marca = _required_text(row, "marca", errors)
+    sheet_name = _text(row.get("sheet_name"))
+    source_row = _text(row.get("linha_origem"))
+
+    _validate_max_length("categoria", categoria_nome, 100, errors)
+    _validate_max_length("exercicio", exercicio_nome, 150, errors)
+    _validate_tracking_related(categoria_nome, exercicio_nome, paciente, options, errors)
+
+    duplicate_of = None
+    if paciente and performed_date and exercicio_nome:
+        unique_key = f"{_tracking_patient_key(paciente)}:{performed_date.isoformat()}:{_key(exercicio_nome)}"
+        duplicate_of = seen.get(unique_key)
+        if duplicate_of is None:
+            seen[unique_key] = row_number
+
+    existing = (
+        _find_existing_tracking_mark(paciente, exercicio_nome, performed_date)
+        if isinstance(paciente, Paciente) and performed_date is not None and exercicio_nome
+        else None
+    )
+    action = ACTION_SKIP if duplicate_of is not None else _existing_action(existing, options)
+    display = {
+        "paciente": _format_value(paciente) if paciente else _text(_first(row, "paciente_cpf", "cpf", "paciente_nome")),
+        "data": _format_value(performed_date),
+        "categoria": categoria_nome,
+        "exercicio": exercicio_nome,
+        "marca": marca,
+    }
+    if sheet_name:
+        display["aba"] = sheet_name
+    if source_row:
+        display["linha"] = source_row
+    if duplicate_of is not None:
+        display["duplicado_da_linha"] = str(duplicate_of)
+    if action == ACTION_SKIP:
+        return PreparedOperation(ImportRowResult(row_number, action, display, errors))
+
+    def save():
+        resolved_paciente = _materialize_tracking_patient(paciente)
+        categoria = _get_or_create_tracking_category(categoria_nome)
+        exercicio = _get_or_create_tracking_exercise(exercicio_nome, categoria, options)
+        tipo_procedimento = _get_or_create_tracking_procedure_type()
+        procedimento = _get_or_create_tracking_procedure(resolved_paciente, tipo_procedimento)
+        procedimento_exercicio = _get_or_create_tracking_procedure_exercise(procedimento, exercicio)
+        sessao = _get_or_create_tracking_session(procedimento, performed_date)
+        _get_or_create_tracking_session_exercise(
+            sessao,
+            procedimento_exercicio,
+            marca=marca,
+            sheet_name=sheet_name,
+            source_row=source_row,
+        )
+
+    return PreparedOperation(ImportRowResult(row_number, action, display, errors), save=None if errors else save)
+
+
 def _canonicalize_row(row: dict[str, Any]) -> dict[str, Any]:
     canonical: dict[str, Any] = {}
     for header, value in row.items():
@@ -573,6 +655,11 @@ def _required_any_text(row: dict[str, Any], keys: list[str], label: str, errors:
             return value
     errors.append(f"Informe {label}.")
     return ""
+
+
+def _validate_max_length(field_name: str, value: str, max_length: int, errors: list[str]) -> None:
+    if len(value) > max_length:
+        errors.append(f"{field_name} deve ter no maximo {max_length} caracteres.")
 
 
 def _text(value: Any) -> str:
@@ -882,6 +969,314 @@ def _materialize_procedure(value):
         obj.full_clean()
         obj.save()
     return obj
+
+
+def _resolve_tracking_patient(
+    row: dict[str, Any],
+    options: ImportOptions,
+    errors: list[str],
+) -> Paciente | PendingRelated | None:
+    cpf = _text(_first(row, "paciente_cpf", "cpf"))
+    if cpf:
+        paciente = Paciente.all_objects.filter(cpf=cpf).first()
+        if paciente is not None:
+            return paciente
+        if not options.create_related:
+            errors.append(f"Paciente nao encontrado para CPF {cpf}.")
+            return None
+
+    name = _text(_first(row, "paciente_nome"))
+    if not name:
+        errors.append("Informe paciente_cpf ou paciente_nome.")
+        return None
+
+    matches = list(Paciente.all_objects.filter(nome__iexact=name)[:2])
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        errors.append(f"Mais de um paciente encontrado com nome {name}. Informe o CPF.")
+        return None
+
+    if not options.create_related:
+        errors.append(f"Paciente nao encontrado: {name}.")
+        return None
+
+    defaults = {
+        "cpf": cpf or None,
+        "observacoes": "Cadastro criado automaticamente pela importacao de historico de exercicios.",
+    }
+    return PendingRelated(Paciente, name, defaults)
+
+
+def _tracking_patient_key(paciente: Paciente | PendingRelated) -> str:
+    if isinstance(paciente, PendingRelated):
+        return f"novo:{_key(paciente.name)}"
+    return f"id:{paciente.pk}"
+
+
+def _materialize_tracking_patient(paciente: Paciente | PendingRelated | None) -> Paciente:
+    if isinstance(paciente, Paciente):
+        _restore_if_needed(paciente)
+        paciente.full_clean()
+        paciente.save()
+        return paciente
+    if not isinstance(paciente, PendingRelated) or paciente.model is not Paciente:
+        raise ValidationError("Paciente nao encontrado para importar o historico de exercicios.")
+
+    existing = _find_by_name(Paciente, paciente.name)
+    if existing is not None:
+        _restore_if_needed(existing)
+        existing.full_clean()
+        existing.save()
+        return existing
+
+    obj = Paciente(nome=paciente.name, **paciente.defaults)
+    obj.full_clean()
+    obj.save()
+    return obj
+
+
+def _validate_tracking_related(
+    categoria_nome: str,
+    exercicio_nome: str,
+    paciente: Paciente | PendingRelated | None,
+    options: ImportOptions,
+    errors: list[str],
+) -> None:
+    if options.create_related:
+        return
+
+    if categoria_nome and _find_by_name(CategoriaExercicio, categoria_nome) is None:
+        errors.append(f"Categoria nao encontrada: {categoria_nome}.")
+    if exercicio_nome and _find_by_name(ExercicioCatalogo, exercicio_nome) is None:
+        errors.append(f"Exercicio nao encontrado: {exercicio_nome}.")
+
+    tipo = _find_by_name(TipoProcedimento, TRACKING_IMPORT_PROCEDURE_TYPE_NAME)
+    if tipo is None:
+        errors.append(f"Tipo de procedimento nao encontrado: {TRACKING_IMPORT_PROCEDURE_TYPE_NAME}.")
+        return
+    if isinstance(paciente, Paciente) and not Procedimento.objects.filter(paciente=paciente, tipo_procedimento=tipo).exists():
+        errors.append("Procedimento de historico de exercicios nao encontrado.")
+
+
+def _find_existing_tracking_mark(
+    paciente: Paciente,
+    exercicio_nome: str,
+    performed_date: date,
+) -> SessaoExercicio | None:
+    exercicio = _find_by_name(ExercicioCatalogo, exercicio_nome)
+    if exercicio is None:
+        return None
+
+    start_datetime, end_datetime = _day_datetime_range(performed_date)
+    return (
+        SessaoExercicio.all_objects.filter(
+            sessao__procedimento__paciente=paciente,
+            sessao__data_hora__gte=start_datetime,
+            sessao__data_hora__lte=end_datetime,
+            exercicio=exercicio,
+        )
+        .order_by("-is_active", "sessao__data_hora", "pk")
+        .first()
+    )
+
+
+def _get_or_create_tracking_category(nome: str) -> CategoriaExercicio:
+    categoria = _find_by_name(CategoriaExercicio, nome)
+    if categoria is None:
+        categoria = CategoriaExercicio(nome=nome)
+    else:
+        _restore_if_needed(categoria)
+    categoria.full_clean()
+    categoria.save()
+    return categoria
+
+
+def _get_or_create_tracking_exercise(
+    nome: str,
+    categoria: CategoriaExercicio,
+    options: ImportOptions,
+) -> ExercicioCatalogo:
+    exercicio = _find_by_name(ExercicioCatalogo, nome)
+    if exercicio is None:
+        exercicio = ExercicioCatalogo(nome=nome, categoria=categoria)
+    else:
+        _restore_if_needed(exercicio)
+        if options.update_existing and exercicio.categoria_id != categoria.pk:
+            exercicio.categoria = categoria
+    exercicio.full_clean()
+    exercicio.save()
+    return exercicio
+
+
+def _get_or_create_tracking_procedure_type() -> TipoProcedimento:
+    tipo = _find_by_name(TipoProcedimento, TRACKING_IMPORT_PROCEDURE_TYPE_NAME)
+    if tipo is None:
+        tipo = TipoProcedimento(nome=TRACKING_IMPORT_PROCEDURE_TYPE_NAME, habilita_exercicios=True)
+    else:
+        _restore_if_needed(tipo)
+        if not tipo.habilita_exercicios:
+            tipo.habilita_exercicios = True
+    tipo.full_clean()
+    tipo.save()
+    return tipo
+
+
+def _get_or_create_tracking_procedure(
+    paciente: Paciente,
+    tipo_procedimento: TipoProcedimento,
+) -> Procedimento:
+    procedimento = (
+        Procedimento.all_objects.filter(paciente=paciente, tipo_procedimento=tipo_procedimento)
+        .order_by("-is_active", "-created_at", "-pk")
+        .first()
+    )
+    if procedimento is None:
+        procedimento = Procedimento(
+            paciente=paciente,
+            tipo_procedimento=tipo_procedimento,
+            observacoes=TRACKING_IMPORT_SESSION_OBSERVATION,
+        )
+    else:
+        _restore_if_needed(procedimento)
+    procedimento.full_clean()
+    procedimento.save()
+    return procedimento
+
+
+def _get_or_create_tracking_procedure_exercise(
+    procedimento: Procedimento,
+    exercicio: ExercicioCatalogo,
+) -> ProcedimentoExercicio:
+    procedimento_exercicio = (
+        ProcedimentoExercicio.all_objects.filter(procedimento=procedimento, exercicio=exercicio)
+        .order_by("-is_active", "ordem", "pk")
+        .first()
+    )
+    if procedimento_exercicio is None:
+        next_order = (
+            ProcedimentoExercicio.all_objects.filter(procedimento=procedimento, is_active=True).aggregate(
+                max_order=Max("ordem")
+            )["max_order"]
+            or 0
+        ) + 1
+        procedimento_exercicio = ProcedimentoExercicio(
+            procedimento=procedimento,
+            exercicio=exercicio,
+            ordem=next_order,
+        )
+    else:
+        _restore_if_needed(procedimento_exercicio)
+    procedimento_exercicio.full_clean()
+    procedimento_exercicio.save()
+    return procedimento_exercicio
+
+
+def _get_or_create_tracking_session(procedimento: Procedimento, performed_date: date) -> Sessao:
+    start_datetime, end_datetime = _day_datetime_range(performed_date)
+    status = _tracking_session_status(performed_date)
+    sessao = (
+        Sessao.all_objects.filter(
+            procedimento=procedimento,
+            data_hora__gte=start_datetime,
+            data_hora__lte=end_datetime,
+        )
+        .order_by("-is_active", "data_hora", "pk")
+        .first()
+    )
+    if sessao is None:
+        sessao = Sessao(
+            procedimento=procedimento,
+            data_hora=_tracking_session_datetime(performed_date),
+            duracao_minutos=60,
+            status=status,
+            observacoes=TRACKING_IMPORT_SESSION_OBSERVATION,
+        )
+    else:
+        _restore_if_needed(sessao)
+        if status == Sessao.STATUS_REALIZADA and sessao.status != Sessao.STATUS_REALIZADA:
+            sessao.status = Sessao.STATUS_REALIZADA
+        elif sessao.status not in {Sessao.STATUS_AGENDADA, Sessao.STATUS_REALIZADA}:
+            sessao.status = status
+    sessao.full_clean()
+    sessao.save()
+    resequence_sessoes(procedimento)
+    sessao.refresh_from_db(fields=["numero"])
+    return sessao
+
+
+def _get_or_create_tracking_session_exercise(
+    sessao: Sessao,
+    procedimento_exercicio: ProcedimentoExercicio,
+    *,
+    marca: str,
+    sheet_name: str,
+    source_row: str,
+) -> SessaoExercicio:
+    status = (
+        SessaoExercicio.STATUS_CONCLUIDO
+        if sessao.status == Sessao.STATUS_REALIZADA
+        else SessaoExercicio.STATUS_PLANEJADO
+    )
+    observacoes = _tracking_mark_observation(marca, sheet_name, source_row)
+    sessao_exercicio = (
+        SessaoExercicio.all_objects.filter(sessao=sessao, exercicio=procedimento_exercicio.exercicio)
+        .order_by("-is_active", "pk")
+        .first()
+    )
+    if sessao_exercicio is None:
+        next_order = (
+            SessaoExercicio.all_objects.filter(sessao=sessao, is_active=True).aggregate(max_order=Max("ordem"))[
+                "max_order"
+            ]
+            or 0
+        ) + 1
+        sessao_exercicio = SessaoExercicio(
+            sessao=sessao,
+            exercicio=procedimento_exercicio.exercicio,
+            ordem=next_order,
+            series=procedimento_exercicio.series,
+            repeticoes=procedimento_exercicio.repeticoes,
+            frequencia=procedimento_exercicio.frequencia,
+            progressao=procedimento_exercicio.progressao,
+            observacoes=observacoes,
+            status=status,
+        )
+    else:
+        _restore_if_needed(sessao_exercicio)
+        sessao_exercicio.status = status
+        if not sessao_exercicio.observacoes or sessao_exercicio.observacoes.startswith("Importacao:"):
+            sessao_exercicio.observacoes = observacoes
+    sessao_exercicio.full_clean()
+    sessao_exercicio.save()
+    return sessao_exercicio
+
+
+def _tracking_mark_observation(marca: str, sheet_name: str, source_row: str) -> str:
+    parts = [f"marca={marca}"]
+    if sheet_name:
+        parts.append(f"aba={sheet_name}")
+    if source_row:
+        parts.append(f"linha={source_row}")
+    return "Importacao: " + "; ".join(parts)
+
+
+def _tracking_session_status(performed_date: date) -> str:
+    if performed_date <= timezone.localdate():
+        return Sessao.STATUS_REALIZADA
+    return Sessao.STATUS_AGENDADA
+
+
+def _tracking_session_datetime(performed_date: date) -> datetime:
+    return timezone.make_aware(datetime.combine(performed_date, time(hour=12)), timezone.get_current_timezone())
+
+
+def _day_datetime_range(value: date) -> tuple[datetime, datetime]:
+    current_timezone = timezone.get_current_timezone()
+    return (
+        timezone.make_aware(datetime.combine(value, time.min), current_timezone),
+        timezone.make_aware(datetime.combine(value, time.max), current_timezone),
+    )
 
 
 def _session_duration(row: dict[str, Any], data_hora: datetime | None, existing: Sessao | None, errors: list[str]) -> int:

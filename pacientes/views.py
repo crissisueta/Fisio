@@ -5,8 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -85,6 +85,33 @@ def mark_paciente_exercise_day(request, pk):
             "created_link": result.created_link,
         }
     )
+
+
+@login_required
+@require_POST
+def update_paciente_exercise_note(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk)
+    note = request.POST.get("nota_exercicios", "").strip()
+    max_length = Paciente._meta.get_field("nota_exercicios").max_length
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    if len(note) > max_length:
+        error = f"A nota deve ter no máximo {max_length} caracteres."
+        if is_ajax:
+            return JsonResponse({"success": False, "error": error}, status=400)
+        messages.error(request, error)
+    else:
+        paciente.nota_exercicios = note
+        paciente.save(update_fields=["nota_exercicios", "updated_at"])
+        if is_ajax:
+            return JsonResponse({"success": True, "nota_exercicios": note})
+        messages.success(request, "Nota de exercícios salva.")
+
+    detail_url = reverse("inscricao-detail", args=[paciente.pk])
+    month = request.POST.get("month", "").strip()
+    if month:
+        detail_url = f"{detail_url}?month={month}"
+    return redirect(detail_url)
 
 
 class PacienteListView(LoginRequiredMixin, ListView):

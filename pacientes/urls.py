@@ -8,6 +8,7 @@ from .views import (
     PacienteUpdateView,
     get_paciente_data,
     mark_paciente_exercise_day,
+    update_paciente_exercise_note,
 )
 
 
@@ -20,6 +21,11 @@ urlpatterns = [
         "inscricao/<int:pk>/exercicios/marcar-dia/",
         mark_paciente_exercise_day,
         name="patient-exercise-day-mark",
+    ),
+    path(
+        "inscricao/<int:pk>/exercicios/nota/",
+        update_paciente_exercise_note,
+        name="patient-exercise-note-update",
     ),
     path("inscricao/<int:pk>/editar/", PacienteUpdateView.as_view(), name="inscricao-update"),
     path("inscricao/<int:pk>/deletar/", PacienteDeleteView.as_view(), name="inscricao-delete"),

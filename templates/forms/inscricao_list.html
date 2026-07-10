@@ -15,10 +15,15 @@
         <tbody>
             {% for ficha in fichas %}
             <tr>
-                <td>{{ ficha.nome }}</td>
-                <td>{{ ficha.cpf }}</td>
-                <td>{{ ficha.email }}</td>
-                <td>{{ ficha.data_matricula|date:"d/m/Y" }}</td>
+                <td>
+                    {{ ficha.nome }}
+                    {% if ficha.profile_incomplete %}
+                    <span class="badge text-bg-warning ms-2">incompleto</span>
+                    {% endif %}
+                </td>
+                <td>{{ ficha.cpf|default:"N/A" }}</td>
+                <td>{{ ficha.email|default:"N/A" }}</td>
+                <td>{{ ficha.data_matricula|date:"d/m/Y"|default:"N/A" }}</td>
                 <td>
                     <div class="btn-group btn-group-custom" role="group">
                         <a href="{% url 'inscricao-detail' ficha.pk %}" class="btn btn-sm btn-info">Ver</a>

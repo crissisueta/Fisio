@@ -3,15 +3,29 @@ from django import forms
 from .services import TARGET_CHOICES
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_file_clean(file_data, initial) for file_data in data]
+        return [single_file_clean(data, initial)]
+
+
 class SpreadsheetImportForm(forms.Form):
     target = forms.ChoiceField(
         choices=TARGET_CHOICES,
         label="Destino",
         widget=forms.Select(attrs={"class": "form-select"}),
     )
-    arquivo = forms.FileField(
-        label="Arquivo",
-        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".xlsx,.csv"}),
+    arquivo = MultipleFileField(
+        label="Arquivos",
+        widget=MultipleFileInput(attrs={"class": "form-control", "accept": ".xlsx,.csv", "multiple": True}),
     )
     sheet_name = forms.CharField(
         required=False,
@@ -38,9 +52,9 @@ class SpreadsheetImportForm(forms.Form):
     )
 
     def clean_arquivo(self):
-        arquivo = self.cleaned_data["arquivo"]
-        name = arquivo.name.lower()
-        if not (name.endswith(".xlsx") or name.endswith(".csv")):
-            raise forms.ValidationError("Envie um arquivo .xlsx ou .csv.")
-        return arquivo
-
+        arquivos = self.cleaned_data["arquivo"]
+        for arquivo in arquivos:
+            name = arquivo.name.lower()
+            if not (name.endswith(".xlsx") or name.endswith(".csv")):
+                raise forms.ValidationError("Envie apenas arquivos .xlsx ou .csv.")
+        return arquivos

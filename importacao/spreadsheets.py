@@ -1,6 +1,8 @@
 import csv
 import re
+import unicodedata
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from io import BytesIO, StringIO
 from pathlib import PurePosixPath
 from typing import Any
@@ -33,6 +35,53 @@ def read_spreadsheet(uploaded_file, sheet_name: str = "") -> SpreadsheetData:
     if filename.endswith(".xlsx"):
         return _read_xlsx(content, sheet_name=sheet_name.strip())
     raise SpreadsheetReadError("Formato não suportado.")
+
+
+def read_exercise_tracking_spreadsheet(uploaded_file, sheet_name: str = "") -> SpreadsheetData:
+    original_filename = uploaded_file.name
+    filename = original_filename.lower()
+    content = uploaded_file.read()
+    if not filename.endswith(".xlsx"):
+        raise SpreadsheetReadError("O historico de exercicios deve ser importado em XLSX.")
+
+    try:
+        with ZipFile(BytesIO(content)) as archive:
+            sheets = _workbook_sheets(archive)
+            if not sheets:
+                raise SpreadsheetReadError("Nenhuma aba encontrada no XLSX.")
+
+            selected_sheets = [_select_sheet(sheets, sheet_name.strip())] if sheet_name.strip() else sheets
+            shared_strings = _shared_strings(archive)
+            rows: list[dict[str, Any]] = []
+            parsed_sheet_names = []
+
+            for selected in selected_sheets:
+                table = _worksheet_numbered_rows(archive, selected["path"], shared_strings)
+                sheet_rows = _exercise_tracking_rows(table, selected["name"])
+                if sheet_rows:
+                    parsed_sheet_names.append(selected["name"])
+                    rows.extend(sheet_rows)
+
+            if not rows:
+                raise SpreadsheetReadError("Nenhuma marca de exercicio foi encontrada nas abas selecionadas.")
+
+            _harmonize_tracking_patient_names(rows, _tracking_filename_stem(original_filename))
+
+            return SpreadsheetData(
+                sheet_name=parsed_sheet_names[0] if len(parsed_sheet_names) == 1 else "Todas as abas",
+                headers=[
+                    "paciente_nome",
+                    "data",
+                    "categoria",
+                    "exercicio",
+                    "marca",
+                    "sheet_name",
+                    "linha_origem",
+                ],
+                rows=rows,
+            )
+    except BadZipFile as exc:
+        raise SpreadsheetReadError("Arquivo XLSX inválido.") from exc
 
 
 def _read_csv(content: bytes) -> list[list[Any]]:
@@ -149,16 +198,25 @@ def _shared_strings(archive: ZipFile) -> list[str]:
 
 
 def _worksheet_rows(archive: ZipFile, path: str, shared_strings: list[str]) -> list[list[Any]]:
+    return [values for _row_number, values in _worksheet_numbered_rows(archive, path, shared_strings)]
+
+
+def _worksheet_numbered_rows(
+    archive: ZipFile,
+    path: str,
+    shared_strings: list[str],
+) -> list[tuple[int, list[Any]]]:
     root = ElementTree.fromstring(archive.read(path))
     rows = []
     for row in root.findall("x:sheetData/x:row", NS_MAIN):
+        row_number = int(row.attrib.get("r", len(rows) + 1))
         values: list[Any] = []
         for cell in row.findall("x:c", NS_MAIN):
             column = _cell_column_index(cell.attrib.get("r", "")) or len(values) + 1
             while len(values) < column - 1:
                 values.append("")
             values.append(_cell_value(cell, shared_strings))
-        rows.append(values)
+        rows.append((row_number, values))
     return rows
 
 
@@ -241,3 +299,162 @@ def _unique_headers(headers: list[str]) -> list[str]:
 def _present(value: Any) -> bool:
     return value is not None and str(value).strip() != ""
 
+
+def _exercise_tracking_rows(numbered_rows: list[tuple[int, list[Any]]], sheet_name: str) -> list[dict[str, Any]]:
+    date_row_position, date_columns = _find_tracking_date_columns(numbered_rows)
+    if date_row_position is None:
+        return []
+
+    rows_before_header = numbered_rows[:date_row_position]
+    patient_name = _tracking_patient_name(rows_before_header)
+    if not patient_name:
+        raise SpreadsheetReadError(f"Aba '{sheet_name}' sem nome de paciente antes das datas.")
+
+    output_rows: list[dict[str, Any]] = []
+    current_category = ""
+
+    for row_number, row in numbered_rows[date_row_position + 1 :]:
+        category_text = _tracking_text(_row_value(row, 1))
+        exercise_name = _tracking_text(_row_value(row, 2))
+
+        if _is_tracking_observation_label(category_text) or _is_tracking_observation_label(exercise_name):
+            break
+
+        if category_text and not exercise_name:
+            current_category = category_text
+            continue
+
+        if not exercise_name:
+            continue
+
+        category_name = category_text or current_category or "Sem categoria"
+        for column_index, performed_date in date_columns:
+            mark = _tracking_text(_row_value(row, column_index))
+            if not mark:
+                continue
+            output_rows.append(
+                {
+                    "paciente_nome": patient_name,
+                    "data": performed_date,
+                    "categoria": category_name,
+                    "exercicio": exercise_name,
+                    "marca": mark,
+                    "sheet_name": sheet_name,
+                    "linha_origem": row_number,
+                }
+            )
+
+    return output_rows
+
+
+def _find_tracking_date_columns(
+    numbered_rows: list[tuple[int, list[Any]]],
+) -> tuple[int | None, list[tuple[int, date]]]:
+    for row_position, (_row_number, row) in enumerate(numbered_rows):
+        date_columns = [
+            (column_index, parsed_date)
+            for column_index, value in enumerate(row)
+            if (parsed_date := _parse_tracking_header_date(value)) is not None
+        ]
+        if date_columns and any(column_index >= 3 for column_index, _parsed_date in date_columns):
+            return row_position, date_columns
+    return None, []
+
+
+def _parse_tracking_header_date(value: Any) -> date | None:
+    if not _present(value):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, (int, float)) and 30000 <= float(value) <= 80000:
+        return (datetime(1899, 12, 30) + timedelta(days=float(value))).date()
+
+    text = _tracking_text(value)
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d-%m-%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _tracking_patient_name(numbered_rows: list[tuple[int, list[Any]]]) -> str:
+    for _row_number, row in numbered_rows:
+        for column_index in (1, 0, 2):
+            text = _tracking_text(_row_value(row, column_index))
+            if _is_tracking_patient_name(text):
+                return text
+    return ""
+
+
+def _harmonize_tracking_patient_names(rows: list[dict[str, Any]], filename_stem: str) -> None:
+    patient_names = sorted({_tracking_text(row.get("paciente_nome")) for row in rows if row.get("paciente_nome")})
+    if not patient_names:
+        return
+
+    filename_candidate = _tracking_text(filename_stem)
+    if (
+        filename_candidate
+        and len(filename_candidate) > max(len(name) for name in patient_names)
+        and _tracking_name_contains_all(filename_candidate, patient_names)
+    ):
+        canonical_name = filename_candidate
+    elif len(patient_names) < 2:
+        return
+    else:
+        canonical_name = max(patient_names, key=len)
+        if not _tracking_name_contains_all(canonical_name, patient_names):
+            return
+
+    for row in rows:
+        row["paciente_nome"] = canonical_name
+
+
+def _tracking_name_contains_all(candidate: str, patient_names: list[str]) -> bool:
+    normalized_candidate = _tracking_normalized_text(candidate)
+    return all(_tracking_normalized_text(name) in normalized_candidate for name in patient_names)
+
+
+def _tracking_filename_stem(filename: str) -> str:
+    stem = PurePosixPath(filename).name
+    stem = re.sub(r"\.xlsx$", "", stem, flags=re.IGNORECASE)
+    return re.sub(r"\(\d+\)$", "", stem).strip()
+
+
+def _is_tracking_patient_name(text: str) -> bool:
+    if not text or text == "-":
+        return False
+    if _is_tracking_observation_label(text):
+        return False
+    if len(text) > 80:
+        return False
+    if re.match(r"^\d{1,2}/\d{1,2}", text):
+        return False
+    if ":" in text:
+        return False
+    return True
+
+
+def _is_tracking_observation_label(text: str) -> bool:
+    normalized = _tracking_normalized_text(text)
+    return normalized in {"observacao", "observacoes"}
+
+
+def _tracking_normalized_text(text: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_text.strip().lower())
+    return normalized.strip("_")
+
+
+def _tracking_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return re.sub(r"\s+", " ", str(value).replace("\n", " ")).strip()
+
+
+def _row_value(row: list[Any], column_index: int) -> Any:
+    return row[column_index] if column_index < len(row) else ""

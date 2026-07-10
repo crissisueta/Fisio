@@ -157,6 +157,21 @@
         padding: 0;
         width: 38px;
     }
+    .exercise-patient-heading {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .exercise-note-form {
+        max-width: 360px;
+        min-width: 240px;
+    }
+    .exercise-note-status {
+        display: inline-block;
+        font-size: 0.75rem;
+        min-width: 48px;
+    }
     .patient-info-drawer .collapse,
     .patient-info-drawer .collapsing { border-top: 1px solid #e9ecef; }
     @media (max-width: 767.98px) {
@@ -177,7 +192,41 @@
 
 {% block content %}
 <div class="row mb-4">
-    <div class="col-md-8"><h1>{{ ficha.nome }}</h1></div>
+    <div class="col-md-8">
+        <div class="exercise-patient-heading">
+            <h1 class="mb-0">{{ ficha.nome }}</h1>
+            <form
+                class="exercise-note-form"
+                method="post"
+                action="{% url 'patient-exercise-note-update' ficha.pk %}"
+                data-exercise-note-form
+            >
+                {% csrf_token %}
+                <input type="hidden" name="month" value="{{ exercise_tracking.month_param }}">
+                <label class="visually-hidden" for="exercisePatientNote">Nota de exercícios</label>
+                <div class="d-flex align-items-center gap-2">
+                    <input
+                        class="form-control form-control-sm"
+                        id="exercisePatientNote"
+                        maxlength="200"
+                        name="nota_exercicios"
+                        placeholder="Nota rápida"
+                        type="text"
+                        value="{{ ficha.nota_exercicios }}"
+                        aria-describedby="exercisePatientNoteStatus"
+                        data-exercise-note-input
+                    >
+                    <span
+                        class="exercise-note-status text-muted"
+                        id="exercisePatientNoteStatus"
+                        role="status"
+                        aria-live="polite"
+                        data-exercise-note-status
+                    ></span>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="col-md-4 text-md-end">
         <div class="d-flex justify-content-md-end gap-2 flex-wrap">
             <div class="btn-group" role="group">
@@ -199,6 +248,21 @@
         </div>
     </div>
 </div>
+
+{% if ficha.profile_incomplete %}
+<div class="alert alert-warning d-flex justify-content-between align-items-start gap-3 flex-wrap" role="alert">
+    <div>
+        <strong>Cadastro do paciente incompleto.</strong>
+        <div>Complete os dados cadastrais para manter a ficha pronta para atendimento.</div>
+        {% if ficha.profile_missing_field_labels %}
+        <div class="small mt-1">
+            Faltando: {{ ficha.profile_missing_field_labels|join:", " }}.
+        </div>
+        {% endif %}
+    </div>
+    <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-sm btn-warning">Completar cadastro</a>
+</div>
+{% endif %}
 
 {% include 'includes/monthly_exercise_tracking_table.html' %}
 
@@ -275,31 +339,31 @@
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6">
-                    <p><strong>CPF:</strong> {{ ficha.cpf }}</p>
-                    <p><strong>Email:</strong> {{ ficha.email }}</p>
-                    <p><strong>Data de Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
+                    <p><strong>CPF:</strong> {{ ficha.cpf|default:"N/A" }}</p>
+                    <p><strong>Email:</strong> {{ ficha.email|default:"N/A" }}</p>
+                    <p><strong>Data de Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y"|default:"N/A" }}</p>
                     <p><strong>Profissão:</strong> {{ ficha.profissao|default:"N/A" }}</p>
                 </div>
                 <div class="col-md-6">
-                    <p><strong>Telefone:</strong> {{ ficha.telefone }}</p>
-                    <p><strong>Celular:</strong> {{ ficha.celular }}</p>
-                    <p><strong>Telefone Comercial:</strong> {{ ficha.telefone_comercial }}</p>
+                    <p><strong>Telefone:</strong> {{ ficha.telefone|default:"N/A" }}</p>
+                    <p><strong>Celular:</strong> {{ ficha.celular|default:"N/A" }}</p>
+                    <p><strong>Telefone Comercial:</strong> {{ ficha.telefone_comercial|default:"N/A" }}</p>
                 </div>
             </div>
 
             <hr>
             <h5 class="card-title">Endereço</h5>
             <div class="row">
-                <div class="col-md-6"><p><strong>Endereço:</strong> {{ ficha.endereco }}</p><p><strong>Bairro:</strong> {{ ficha.bairro }}</p></div>
-                <div class="col-md-6"><p><strong>CEP:</strong> {{ ficha.cep }}</p></div>
+                <div class="col-md-6"><p><strong>Endereço:</strong> {{ ficha.endereco|default:"N/A" }}</p><p><strong>Bairro:</strong> {{ ficha.bairro|default:"N/A" }}</p></div>
+                <div class="col-md-6"><p><strong>CEP:</strong> {{ ficha.cep|default:"N/A" }}</p></div>
             </div>
 
             <hr>
             <h5 class="card-title">Cadastro</h5>
             <div class="row">
                 <div class="col-md-6">
-                    <p><strong>Data de Matrícula:</strong> {{ ficha.data_matricula|date:"d/m/Y" }}</p>
-                    <p><strong>Plano:</strong> {{ ficha.plano }}</p>
+                    <p><strong>Data de Matrícula:</strong> {{ ficha.data_matricula|date:"d/m/Y"|default:"N/A" }}</p>
+                    <p><strong>Plano:</strong> {{ ficha.plano|default:"N/A" }}</p>
                 </div>
                 <div class="col-md-6">
                     <p><strong>Criado em:</strong> {{ ficha.created_at|date:"d/m/Y H:i" }}</p>
@@ -319,6 +383,52 @@
 
 {% block extra_js %}
 <script>
+    document.querySelectorAll('[data-exercise-note-form]').forEach(function (form) {
+        var input = form.querySelector('[data-exercise-note-input]');
+        var status = form.querySelector('[data-exercise-note-status]');
+        var savedValue = input.value.trim();
+
+        input.addEventListener('blur', function () {
+            var note = input.value.trim();
+            if (note === savedValue) {
+                return;
+            }
+
+            status.textContent = 'Salvando...';
+            status.classList.remove('text-success', 'text-danger');
+            status.classList.add('text-muted');
+
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+                .then(function (response) {
+                    return response.json().then(function (payload) {
+                        if (!response.ok || !payload.success) {
+                            throw new Error(payload.error || 'Não foi possível salvar a nota.');
+                        }
+                        return payload;
+                    });
+                })
+                .then(function (payload) {
+                    savedValue = payload.nota_exercicios;
+                    input.value = payload.nota_exercicios;
+                    status.textContent = 'Salvo';
+                    status.classList.remove('text-muted', 'text-danger');
+                    status.classList.add('text-success');
+                })
+                .catch(function (error) {
+                    status.textContent = error.message;
+                    status.classList.remove('text-muted', 'text-success');
+                    status.classList.add('text-danger');
+                });
+        });
+    });
+
     document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function (element) {
         new bootstrap.Popover(element);
     });
