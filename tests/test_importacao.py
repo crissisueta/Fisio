@@ -232,6 +232,8 @@ class ImportacaoViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cadastro do paciente incompleto.")
         self.assertContains(response, "Completar cadastro")
+        self.assertContains(response, 'data-bs-dismiss="alert"')
+        self.assertContains(response, 'aria-label="Fechar"')
 
 
 class SpreadsheetReaderTests(TestCase):

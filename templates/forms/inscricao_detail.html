@@ -250,17 +250,20 @@
 </div>
 
 {% if ficha.profile_incomplete %}
-<div class="alert alert-warning d-flex justify-content-between align-items-start gap-3 flex-wrap" role="alert">
-    <div>
-        <strong>Cadastro do paciente incompleto.</strong>
-        <div>Complete os dados cadastrais para manter a ficha pronta para atendimento.</div>
-        {% if ficha.profile_missing_field_labels %}
-        <div class="small mt-1">
-            Faltando: {{ ficha.profile_missing_field_labels|join:", " }}.
+<div class="alert alert-warning alert-dismissible fade show pe-5" role="alert">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+            <strong>Cadastro do paciente incompleto.</strong>
+            <div>Complete os dados cadastrais para manter a ficha pronta para atendimento.</div>
+            {% if ficha.profile_missing_field_labels %}
+            <div class="small mt-1">
+                Faltando: {{ ficha.profile_missing_field_labels|join:", " }}.
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
+        <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-sm btn-warning">Completar cadastro</a>
     </div>
-    <a href="{% url 'inscricao-update' ficha.pk %}" class="btn btn-sm btn-warning">Completar cadastro</a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
 </div>
 {% endif %}
 

@@ -14,7 +14,11 @@
     .exercise-item-red { border-color: #dc3545; background: rgba(220, 53, 69, 0.06); }
     .exercise-item-blue { border-color: var(--app-primary); background: rgba(var(--app-primary-rgb), 0.06); }
     .exercise-item-normal { border-color: #dee2e6; }
-    .exercise-warning-badge { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 999px; background: #ffc107; color: #212529; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; border: 1px solid rgba(0, 0, 0, 0.12); }
+    .exercise-card-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .exercise-card-title { flex: 1 1 125px; min-width: 0; overflow-wrap: anywhere; }
+    .exercise-status-group { display: flex; align-items: flex-start; justify-content: flex-end; flex: 0 1 140px; flex-wrap: wrap; gap: 4px; min-width: 0; }
+    .exercise-status-group .badge { line-height: 1.15; max-width: 100%; text-align: center; white-space: normal; }
+    .exercise-warning-badge { width: 22px; height: 22px; border-radius: 999px; background: #ffc107; color: #212529; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; font-weight: 700; border: 1px solid rgba(0, 0, 0, 0.12); }
     .exercise-list-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
     .exercise-item:hover { box-shadow: 0 0.35rem 0.9rem rgba(33, 37, 41, 0.08); }
     .session-exercise-option { cursor: pointer; }
