@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from io import BytesIO
+from unittest.mock import patch
 from zipfile import ZipFile
 from xml.sax.saxutils import escape
 
@@ -127,15 +128,17 @@ class ImportacaoServiceTests(TestCase):
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        result = import_uploaded_spreadsheet(
-            upload,
-            ImportOptions(target="historico_exercicios", dry_run=False),
-        )
+        with patch("importacao.services.resequence_sessoes") as resequence_sessoes_mock:
+            result = import_uploaded_spreadsheet(
+                upload,
+                ImportOptions(target="historico_exercicios", dry_run=False),
+            )
 
         self.assertTrue(result.saved)
         self.assertFalse(result.has_errors)
         self.assertEqual(result.created_count, 2)
         self.assertEqual(result.skipped_count, 1)
+        self.assertEqual(resequence_sessoes_mock.call_count, 1)
         paciente = Paciente.objects.get(nome="Ana Lima")
         self.assertIsNone(paciente.cpf)
         self.assertTrue(paciente.profile_incomplete)
