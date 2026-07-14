@@ -1,16 +1,21 @@
+import json
 import re
 import unicodedata
 from datetime import date, datetime, time
-from io import BytesIO
+from io import BytesIO, StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from zipfile import ZipFile
 from xml.sax.saxutils import escape
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import DatabaseError
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.db import DatabaseError, connection
 from django.test import TestCase
-from django.test.utils import override_settings
+from django.test.utils import CaptureQueriesContext, override_settings
 from django.urls import reverse
 
 from exercicios.models import CategoriaExercicio, ExercicioCatalogo, ProcedimentoExercicio, SessaoExercicio
@@ -188,7 +193,7 @@ class ImportacaoViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Importar Histórico de Exercícios")
-        self.assertContains(response, "arquivos .xlsx de histórico de exercícios")
+        self.assertContains(response, "Lotes maiores devem ser processados pelo comando em lote")
         self.assertNotContains(response, 'name="target"')
         self.assertNotContains(response, ".csv")
 
@@ -217,6 +222,7 @@ class ImportacaoViewTests(TestCase):
         self.assertEqual(ProcedimentoExercicio.objects.count(), 188)
         self.assertEqual(SessaoExercicio.objects.count(), 4)
 
+    @override_settings(IMPORTACAO_WEB_MAX_FILES=10)
     def test_staff_can_import_multiple_tracking_xlsx_files(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
         self.client.force_login(staff)
@@ -266,6 +272,7 @@ class ImportacaoViewTests(TestCase):
         self.assertEqual(ProcedimentoExercicio.objects.count(), 2)
         self.assertEqual(SessaoExercicio.objects.count(), 2)
 
+    @override_settings(IMPORTACAO_WEB_MAX_FILES=10)
     def test_multiple_upload_reports_success_and_failure_per_file(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
         self.client.force_login(staff)
@@ -300,6 +307,35 @@ class ImportacaoViewTests(TestCase):
         self.assertContains(response, "historico-invalido.xlsx")
         self.assertContains(response, "Arquivo XLSX inválido")
         self.assertContains(response, "Importacao com falha em 1 de 2 arquivo(s)")
+
+    def test_web_import_rejects_batches_above_configured_limit(self):
+        staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
+        self.client.force_login(staff)
+        first_upload = SimpleUploadedFile(
+            "historico-1.xlsx",
+            _tracking_xlsx_for_patient("Paciente Um", date(2026, 7, 6)),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        second_upload = SimpleUploadedFile(
+            "historico-2.xlsx",
+            _tracking_xlsx_for_patient("Paciente Dois", date(2026, 7, 6)),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        response = self.client.post(
+            reverse("spreadsheet-import"),
+            {
+                "arquivo": [first_upload, second_upload],
+                "update_existing": "on",
+                "create_related": "on",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "A importacao web aceita no maximo 1 arquivo")
+        self.assertFalse(Paciente.objects.exists())
+        self.assertFalse(SessaoExercicio.objects.exists())
 
     def test_tracking_import_uses_post_redirect_get_and_refresh_does_not_repost(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
@@ -385,6 +421,126 @@ class ImportacaoViewTests(TestCase):
         self.assertContains(response, "Completar cadastro")
         self.assertContains(response, 'data-bs-dismiss="alert"')
         self.assertContains(response, 'aria-label="Fechar"')
+
+
+class ImportarHistoricosCommandTests(TestCase):
+    def test_imports_single_file(self):
+        with TemporaryDirectory() as tmpdir:
+            path = _write_tracking_file(tmpdir, "historico-001.xlsx", "Paciente Comando")
+            output = StringIO()
+
+            call_command("importar_historicos", str(path), stdout=output)
+
+        self.assertIn("Processados: 1", output.getvalue())
+        self.assertIn("Concluidos: 1", output.getvalue())
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Comando").exists())
+        self.assertEqual(SessaoExercicio.objects.count(), 1)
+
+    def test_imports_directory_with_five_files(self):
+        with TemporaryDirectory() as tmpdir:
+            for index in range(5):
+                _write_tracking_file(tmpdir, f"historico-{index:03d}.xlsx", f"Paciente Lote {index}")
+            output = StringIO()
+
+            call_command("importar_historicos", tmpdir, stdout=output)
+
+        self.assertIn("Processados: 5", output.getvalue())
+        self.assertEqual(Paciente.objects.count(), 5)
+        self.assertEqual(SessaoExercicio.objects.count(), 5)
+
+    def test_dry_run_does_not_change_database(self):
+        with TemporaryDirectory() as tmpdir:
+            path = _write_tracking_file(tmpdir, "historico-001.xlsx", "Paciente Dry Run")
+            output = StringIO()
+
+            call_command("importar_historicos", str(path), dry_run=True, stdout=output)
+
+        self.assertIn("resultado: simulado", output.getvalue())
+        self.assertEqual(_tracking_counts(), _empty_tracking_counts())
+
+    def test_continue_on_error_processes_valid_files_after_invalid_file(self):
+        with TemporaryDirectory() as tmpdir:
+            _write_tracking_file(tmpdir, "001-valido.xlsx", "Paciente Valido Antes")
+            Path(tmpdir, "002-invalido.xlsx").write_bytes(b"nao e xlsx")
+            _write_tracking_file(tmpdir, "003-valido.xlsx", "Paciente Valido Depois")
+            output = StringIO()
+
+            with self.assertRaises(CommandError):
+                call_command("importar_historicos", tmpdir, continue_on_error=True, stdout=output)
+
+        self.assertIn("Continuando para o proximo arquivo", output.getvalue())
+        self.assertIn("Falharam: 1", output.getvalue())
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Valido Antes").exists())
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Valido Depois").exists())
+
+    def test_stops_on_first_error_without_continue_on_error(self):
+        with TemporaryDirectory() as tmpdir:
+            _write_tracking_file(tmpdir, "001-valido.xlsx", "Paciente Antes")
+            Path(tmpdir, "002-invalido.xlsx").write_bytes(b"nao e xlsx")
+            _write_tracking_file(tmpdir, "003-valido.xlsx", "Paciente Depois")
+            output = StringIO()
+
+            with self.assertRaises(CommandError):
+                call_command("importar_historicos", tmpdir, stdout=output)
+
+        self.assertIn("Processados: 2", output.getvalue())
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Antes").exists())
+        self.assertFalse(Paciente.objects.filter(nome="Paciente Depois").exists())
+
+    def test_writes_json_report(self):
+        with TemporaryDirectory() as tmpdir:
+            path = _write_tracking_file(tmpdir, "historico-001.xlsx", "Paciente Relatorio")
+            report_path = Path(tmpdir, "relatorio.json")
+
+            call_command("importar_historicos", str(path), dry_run=True, report=str(report_path), stdout=StringIO())
+
+            data = json.loads(report_path.read_text())
+
+        self.assertEqual(data[0]["arquivo"], "historico-001.xlsx")
+        self.assertEqual(data[0]["status"], "simulado")
+        self.assertIn("duracao", data[0])
+
+    def test_failure_returns_command_error(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "invalido.xlsx")
+            path.write_bytes(b"nao e xlsx")
+
+            with self.assertRaises(CommandError):
+                call_command("importar_historicos", str(path), stdout=StringIO())
+
+    def test_reexecution_is_idempotent(self):
+        with TemporaryDirectory() as tmpdir:
+            path = _write_tracking_file(tmpdir, "historico-001.xlsx", "Paciente Idempotente")
+            call_command("importar_historicos", str(path), stdout=StringIO())
+            after_first = _tracking_counts()
+            call_command("importar_historicos", str(path), stdout=StringIO())
+
+        self.assertEqual(_tracking_counts(), after_first)
+        self.assertEqual(SessaoExercicio.objects.count(), 1)
+
+    def test_rolls_back_only_current_file_when_later_file_fails(self):
+        from importacao import services as importacao_services
+
+        original = importacao_services._get_or_create_tracking_session_exercise
+
+        def fail_for_one_patient(sessao, *args, **kwargs):
+            if sessao.procedimento.paciente.nome == "Paciente Falha":
+                raise DatabaseError("falha simulada")
+            return original(sessao, *args, **kwargs)
+
+        with TemporaryDirectory() as tmpdir:
+            _write_tracking_file(tmpdir, "001-ok.xlsx", "Paciente Ok")
+            _write_tracking_file(tmpdir, "002-falha.xlsx", "Paciente Falha")
+            _write_tracking_file(tmpdir, "003-depois.xlsx", "Paciente Depois")
+
+            with patch("importacao.services._get_or_create_tracking_session_exercise", side_effect=fail_for_one_patient):
+                with self.assertRaises(CommandError):
+                    call_command("importar_historicos", tmpdir, continue_on_error=True, stdout=StringIO())
+
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Ok").exists())
+        self.assertFalse(Paciente.objects.filter(nome="Paciente Falha").exists())
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Depois").exists())
+        self.assertEqual(SessaoExercicio.objects.count(), 2)
 
 
 class SpreadsheetReaderTests(TestCase):
@@ -598,6 +754,29 @@ class SpreadsheetReaderTests(TestCase):
         procedimento = Procedimento.objects.get(paciente=paciente, tipo_procedimento__nome="Pilates")
         self.assertEqual(ProcedimentoExercicio.objects.filter(procedimento=procedimento).count(), 188)
 
+    def test_reference_tracking_import_query_regression(self):
+        upload = SimpleUploadedFile(
+            "referencia-anonima.xlsx",
+            _build_reference_tracking_xlsx(date(2026, 7, 6)),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            result = import_uploaded_spreadsheet(
+                upload,
+                ImportOptions(target="historico_exercicios", dry_run=False),
+            )
+
+        self.assertTrue(result.saved)
+        self.assertFalse(result.has_errors)
+        self.assertLessEqual(len(queries.captured_queries), 450)
+        self.assertFalse(
+            any(
+                "forms_sessaoexercicio" in query["sql"] and "LIMIT 1" in query["sql"]
+                for query in queries.captured_queries
+            )
+        )
+
     def test_import_keeps_same_exercise_name_in_different_categories(self):
         performed_date = date(2026, 7, 6)
         content = _build_xlsx_workbook(
@@ -739,6 +918,24 @@ class SpreadsheetReaderTests(TestCase):
         self.assertTrue(result.has_errors)
         self.assertIn("Erro ao salvar no banco de dados", result.errors[0])
         self.assertEqual(_tracking_counts(), before_counts)
+
+
+def _tracking_xlsx_for_patient(patient_name, performed_date, category="Solo", exercise="Ponte", mark="X"):
+    return _build_xlsx_workbook(
+        {
+            "JUL26": [
+                ["", patient_name],
+                ["", "", "", _excel_serial(performed_date)],
+                ["", category, exercise, mark],
+            ]
+        }
+    )
+
+
+def _write_tracking_file(directory, filename, patient_name):
+    path = Path(directory) / filename
+    path.write_bytes(_tracking_xlsx_for_patient(patient_name, date(2026, 7, 6)))
+    return path
 
 
 def _tracking_counts():

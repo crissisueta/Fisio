@@ -1,4 +1,6 @@
 from django import forms
+from django.conf import settings
+
 
 class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
@@ -45,6 +47,13 @@ class SpreadsheetImportForm(forms.Form):
 
     def clean_arquivo(self):
         arquivos = self.cleaned_data["arquivo"]
+        max_files = getattr(settings, "IMPORTACAO_WEB_MAX_FILES", 1)
+        if max_files and len(arquivos) > max_files:
+            raise forms.ValidationError(
+                "A importacao web aceita no maximo %(max_files)s arquivo(s). "
+                "Para lotes maiores, use o comando python manage.py importar_historicos.",
+                params={"max_files": max_files},
+            )
         for arquivo in arquivos:
             name = arquivo.name.lower()
             if not name.endswith(".xlsx"):

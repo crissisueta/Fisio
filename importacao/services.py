@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from avaliacoes.models import Avaliacao, TipoAvaliacao
@@ -123,6 +123,8 @@ class TrackingImportSaveContext:
     next_procedure_exercise_order: dict[int, int] = field(default_factory=dict)
     next_session_exercise_order: dict[int, int] = field(default_factory=dict)
     preloaded_procedure_exercises: set[int] = field(default_factory=set)
+    preloaded_sessions: set[int] = field(default_factory=set)
+    preloaded_session_exercises: set[int] = field(default_factory=set)
     exercises_preloaded: bool = False
 
 
@@ -754,14 +756,13 @@ def _resolve_tracking_patient_cached(
 def _preload_tracking_preview_cache(seen: dict[str, Any], rows: list[dict[str, Any]]) -> None:
     canonical_rows = [_canonicalize_row(row) for row in rows]
     category_names = {_text(row.get("categoria")) for row in canonical_rows if _text(row.get("categoria"))}
-    exercise_names = {_text(row.get("exercicio")) for row in canonical_rows if _text(row.get("exercicio"))}
-    seen["__tracking_existing_exercises"] = {
-        _exercise_cache_key(exercicio.categoria.nome, exercicio.nome): exercicio
-        for exercicio in ExercicioCatalogo.all_objects.filter(
-            categoria__nome__in=category_names,
-            nome__in=exercise_names,
-        ).select_related("categoria")
+    target_exercise_keys = {
+        _exercise_cache_key(row.get("categoria"), row.get("exercicio"))
+        for row in canonical_rows
+        if _text(row.get("categoria")) and _text(row.get("exercicio"))
     }
+    categories = _tracking_categories_by_name(category_names)
+    seen["__tracking_existing_exercises"] = _tracking_exercises_by_key(categories.values(), target_exercise_keys)
 
 
 def _tracking_existing_exercise_cached(categoria_nome: str, exercicio_nome: str, seen: dict[str, Any]):
@@ -773,26 +774,54 @@ def _tracking_existing_exercise_cached(categoria_nome: str, exercicio_nome: str,
 
 def _preload_tracking_context(context: TrackingImportSaveContext, rows: list[dict[str, Any]]) -> None:
     category_names = {_text(row.get("categoria")) for row in rows if _text(row.get("categoria"))}
-    exercise_names = {_text(row.get("exercicio")) for row in rows if _text(row.get("exercicio"))}
+    target_exercise_keys = {
+        _exercise_cache_key(row.get("categoria"), row.get("exercicio"))
+        for row in rows
+        if _text(row.get("categoria")) and _text(row.get("exercicio"))
+    }
     patient_names = {_text(row.get("paciente_nome")) for row in rows if _text(row.get("paciente_nome"))}
     patient_cpfs = {_text(_first(row, "paciente_cpf", "cpf")) for row in rows if _text(_first(row, "paciente_cpf", "cpf"))}
 
-    if category_names:
-        for categoria in CategoriaExercicio.all_objects.filter(nome__in=category_names):
-            context.categories[_key(categoria.nome)] = categoria
-    if category_names and exercise_names:
-        for exercicio in ExercicioCatalogo.all_objects.filter(
-            categoria__nome__in=category_names,
-            nome__in=exercise_names,
-        ).select_related("categoria"):
-            context.exercises[_exercise_cache_key(exercicio.categoria.nome, exercicio.nome)] = exercicio
+    context.categories.update(_tracking_categories_by_name(category_names))
+    context.exercises.update(_tracking_exercises_by_key(context.categories.values(), target_exercise_keys))
     if patient_cpfs:
         for paciente in Paciente.all_objects.filter(cpf__in=patient_cpfs):
             _cache_tracking_patient(context, paciente)
     if patient_names:
-        for paciente in Paciente.all_objects.filter(nome__in=patient_names):
+        for paciente in Paciente.all_objects.filter(_case_insensitive_name_q("nome", patient_names)):
             _cache_tracking_patient(context, paciente)
     context.exercises_preloaded = True
+
+
+def _case_insensitive_name_q(field_name: str, names: set[str]) -> Q:
+    query = Q()
+    for name in names:
+        query |= Q(**{f"{field_name}__iexact": name})
+    return query
+
+
+def _tracking_categories_by_name(names: set[str]) -> dict[str, CategoriaExercicio]:
+    if not names:
+        return {}
+    return {
+        _key(categoria.nome): categoria
+        for categoria in CategoriaExercicio.all_objects.filter(_case_insensitive_name_q("nome", names))
+    }
+
+
+def _tracking_exercises_by_key(
+    categories: Any,
+    target_keys: set[str],
+) -> dict[str, ExercicioCatalogo]:
+    category_ids = [categoria.pk for categoria in categories if categoria.pk]
+    if not category_ids or not target_keys:
+        return {}
+    exercises = {}
+    for exercicio in ExercicioCatalogo.all_objects.filter(categoria_id__in=category_ids).select_related("categoria"):
+        cache_key = _exercise_cache_key(exercicio.categoria.nome, exercicio.nome)
+        if cache_key in target_keys:
+            exercises[cache_key] = exercicio
+    return exercises
 
 
 def _canonicalize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -1301,6 +1330,18 @@ def _save_tracking_object(obj, changed: bool = False) -> None:
     obj.save()
 
 
+def _save_new_tracking_object_with_cached_relations(obj, relation_fields: list[str]) -> None:
+    for field_name in relation_fields:
+        related = getattr(obj, field_name)
+        if related is None or related.pk is None:
+            raise ValidationError(f"Relacao {field_name} nao foi materializada antes de salvar.")
+
+    # The import context already resolves these FKs and cache keys in batches.
+    # Database constraints remain the final guard for uniqueness/race conditions.
+    obj.full_clean(exclude=relation_fields, validate_constraints=False)
+    obj.save()
+
+
 def _materialize_tracking_patient(
     paciente: Paciente | PendingRelated | None,
     context: TrackingImportSaveContext | None = None,
@@ -1387,11 +1428,11 @@ def _get_or_create_tracking_exercise(
         return context.exercises[cache_key]
 
     exercicio = None if context is not None and context.exercises_preloaded else _find_exercise_by_category(categoria, nome)
-    changed = False
     if exercicio is None:
         exercicio = ExercicioCatalogo(nome=nome, categoria=categoria)
-        changed = True
-    _save_tracking_object(exercicio, changed=changed)
+        _save_new_tracking_object_with_cached_relations(exercicio, ["categoria"])
+    else:
+        _save_tracking_object(exercicio)
     if context is not None:
         context.exercises[cache_key] = exercicio
     return exercicio
@@ -1453,12 +1494,16 @@ def _preload_tracking_procedure_exercises(
 ) -> None:
     if procedimento.pk in context.preloaded_procedure_exercises:
         return
+    max_order = 0
     for procedimento_exercicio in (
         ProcedimentoExercicio.all_objects.filter(procedimento=procedimento)
         .select_related("exercicio")
         .order_by("ordem", "pk")
     ):
         context.procedure_exercises[(procedimento.pk, procedimento_exercicio.exercicio_id)] = procedimento_exercicio
+        if procedimento_exercicio.is_active:
+            max_order = max(max_order, procedimento_exercicio.ordem)
+    context.next_procedure_exercise_order[procedimento.pk] = max_order + 1
     context.preloaded_procedure_exercises.add(procedimento.pk)
 
 
@@ -1469,7 +1514,9 @@ def _get_or_create_tracking_procedure_exercise(
 ) -> ProcedimentoExercicio:
     cache_key = (procedimento.pk, exercicio.pk)
     if context is not None and cache_key in context.procedure_exercises:
-        return context.procedure_exercises[cache_key]
+        procedimento_exercicio = context.procedure_exercises[cache_key]
+        _save_tracking_object(procedimento_exercicio)
+        return procedimento_exercicio
 
     if context is not None and procedimento.pk in context.preloaded_procedure_exercises:
         procedimento_exercicio = None
@@ -1486,7 +1533,10 @@ def _get_or_create_tracking_procedure_exercise(
             exercicio=exercicio,
             ordem=next_order,
         )
-        _save_tracking_object(procedimento_exercicio, changed=True)
+        _save_new_tracking_object_with_cached_relations(
+            procedimento_exercicio,
+            ["procedimento", "exercicio"],
+        )
     else:
         _save_tracking_object(procedimento_exercicio)
     if context is not None:
@@ -1520,20 +1570,23 @@ def _get_or_create_tracking_session(
     context: TrackingImportSaveContext | None = None,
 ) -> Sessao:
     cache_key = (procedimento.pk, performed_date)
-    if context is not None and cache_key in context.sessions:
-        return context.sessions[cache_key]
-
-    start_datetime, end_datetime = _day_datetime_range(performed_date)
     status = _tracking_session_status(performed_date)
-    sessao = (
-        Sessao.all_objects.filter(
-            procedimento=procedimento,
-            data_hora__gte=start_datetime,
-            data_hora__lte=end_datetime,
+
+    if context is not None:
+        _preload_tracking_sessions(context, procedimento)
+        sessao = context.sessions.get(cache_key)
+    else:
+        start_datetime, end_datetime = _day_datetime_range(performed_date)
+        sessao = (
+            Sessao.all_objects.filter(
+                procedimento=procedimento,
+                data_hora__gte=start_datetime,
+                data_hora__lte=end_datetime,
+            )
+            .order_by("-is_active", "data_hora", "pk")
+            .first()
         )
-        .order_by("-is_active", "data_hora", "pk")
-        .first()
-    )
+
     if sessao is None:
         sessao = Sessao(
             procedimento=procedimento,
@@ -1544,17 +1597,47 @@ def _get_or_create_tracking_session(
         )
         _save_tracking_object(sessao, changed=True)
     else:
-        changed = False
-        if status == Sessao.STATUS_REALIZADA and sessao.status != Sessao.STATUS_REALIZADA:
-            sessao.status = Sessao.STATUS_REALIZADA
-            changed = True
-        elif sessao.status not in {Sessao.STATUS_AGENDADA, Sessao.STATUS_REALIZADA}:
-            sessao.status = status
-            changed = True
-        _save_tracking_object(sessao, changed=changed)
+        _update_tracking_session_status(sessao, status)
     if context is not None:
         context.sessions[cache_key] = sessao
+        _preload_tracking_session_exercises(context, sessao)
     return sessao
+
+
+def _preload_tracking_sessions(context: TrackingImportSaveContext, procedimento: Procedimento) -> None:
+    if procedimento.pk in context.preloaded_sessions:
+        return
+    for sessao in Sessao.all_objects.filter(procedimento=procedimento).order_by("-is_active", "data_hora", "pk"):
+        performed_date = timezone.localtime(sessao.data_hora).date()
+        context.sessions.setdefault((procedimento.pk, performed_date), sessao)
+    context.preloaded_sessions.add(procedimento.pk)
+
+
+def _update_tracking_session_status(sessao: Sessao, status: str) -> None:
+    changed = False
+    if status == Sessao.STATUS_REALIZADA and sessao.status != Sessao.STATUS_REALIZADA:
+        sessao.status = Sessao.STATUS_REALIZADA
+        changed = True
+    elif sessao.status not in {Sessao.STATUS_AGENDADA, Sessao.STATUS_REALIZADA}:
+        sessao.status = status
+        changed = True
+    _save_tracking_object(sessao, changed=changed)
+
+
+def _preload_tracking_session_exercises(context: TrackingImportSaveContext, sessao: Sessao) -> None:
+    if sessao.pk in context.preloaded_session_exercises:
+        return
+    max_order = 0
+    for sessao_exercicio in (
+        SessaoExercicio.all_objects.filter(sessao=sessao)
+        .select_related("exercicio")
+        .order_by("ordem", "pk")
+    ):
+        context.session_exercises[(sessao.pk, sessao_exercicio.exercicio_id)] = sessao_exercicio
+        if sessao_exercicio.is_active:
+            max_order = max(max_order, sessao_exercicio.ordem)
+    context.next_session_exercise_order[sessao.pk] = max_order + 1
+    context.preloaded_session_exercises.add(sessao.pk)
 
 
 def _get_or_create_tracking_session_exercise(
@@ -1567,8 +1650,15 @@ def _get_or_create_tracking_session_exercise(
     context: TrackingImportSaveContext | None = None,
 ) -> SessaoExercicio:
     cache_key = (sessao.pk, procedimento_exercicio.exercicio_id)
-    if context is not None and cache_key in context.session_exercises:
-        return context.session_exercises[cache_key]
+    if context is not None:
+        _preload_tracking_session_exercises(context, sessao)
+        sessao_exercicio = context.session_exercises.get(cache_key)
+    else:
+        sessao_exercicio = (
+            SessaoExercicio.all_objects.filter(sessao=sessao, exercicio=procedimento_exercicio.exercicio)
+            .order_by("-is_active", "pk")
+            .first()
+        )
 
     status = (
         SessaoExercicio.STATUS_CONCLUIDO
@@ -1576,11 +1666,6 @@ def _get_or_create_tracking_session_exercise(
         else SessaoExercicio.STATUS_PLANEJADO
     )
     observacoes = _tracking_mark_observation(marca, sheet_name, source_row)
-    sessao_exercicio = (
-        SessaoExercicio.all_objects.filter(sessao=sessao, exercicio=procedimento_exercicio.exercicio)
-        .order_by("-is_active", "pk")
-        .first()
-    )
     if sessao_exercicio is None:
         next_order = _next_tracking_session_exercise_order(sessao, context)
         sessao_exercicio = SessaoExercicio(
@@ -1594,7 +1679,7 @@ def _get_or_create_tracking_session_exercise(
             observacoes=observacoes,
             status=status,
         )
-        _save_tracking_object(sessao_exercicio, changed=True)
+        _save_new_tracking_object_with_cached_relations(sessao_exercicio, ["sessao", "exercicio"])
     else:
         changed = False
         if _tracking_restore_needed(sessao_exercicio):
