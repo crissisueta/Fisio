@@ -1,8 +1,12 @@
+import hashlib
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from time import monotonic
 from typing import Any, Callable
+from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
@@ -16,6 +20,9 @@ from procedimentos.models import Procedimento, Sessao, TipoProcedimento
 from procedimentos.services.scheduling import resequence_sessoes
 
 from .spreadsheets import SpreadsheetReadError, read_exercise_tracking_spreadsheet, read_spreadsheet
+
+
+logger = logging.getLogger(__name__)
 
 
 TARGET_PATIENTS = "pacientes"
@@ -77,6 +84,9 @@ class ImportResult:
     saved: bool = False
     rows: list[ImportRowResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    category_count: int = 0
+    exercise_count: int = 0
+    mark_count: int = 0
 
     @property
     def has_errors(self) -> bool:
@@ -120,6 +130,8 @@ class TrackingImportSaveContext:
     session_exercises: dict[tuple[int, int], SessaoExercicio] = field(default_factory=dict)
     next_procedure_exercise_order: dict[int, int] = field(default_factory=dict)
     next_session_exercise_order: dict[int, int] = field(default_factory=dict)
+    preloaded_procedure_exercises: set[int] = field(default_factory=set)
+    exercises_preloaded: bool = False
 
 
 COLUMN_ALIASES = {
@@ -192,27 +204,68 @@ COLUMN_ALIASES = {
 
 
 def import_uploaded_spreadsheet(uploaded_file, options: ImportOptions, sheet_name: str = "") -> ImportResult:
+    import_id = uuid4().hex
+    file_digest = _uploaded_file_digest(uploaded_file)
+    started_at = monotonic()
+    result = ImportResult(target=options.target, dry_run=options.dry_run)
+    logger.info(
+        "spreadsheet_import id=%s file_sha256=%s target=%s event=start",
+        import_id,
+        file_digest,
+        options.target,
+    )
+
     try:
         if options.target == TARGET_EXERCISE_TRACKING:
             spreadsheet = read_exercise_tracking_spreadsheet(uploaded_file, sheet_name=sheet_name)
         else:
             spreadsheet = read_spreadsheet(uploaded_file, sheet_name=sheet_name)
+        result = import_rows(spreadsheet.rows, options, sheet_name=spreadsheet.sheet_name)
     except SpreadsheetReadError as exc:
-        return ImportResult(target=options.target, dry_run=options.dry_run, errors=[str(exc)])
-
-    result = import_rows(spreadsheet.rows, options, sheet_name=spreadsheet.sheet_name)
+        result = ImportResult(target=options.target, dry_run=options.dry_run, errors=[str(exc)])
+    except Exception:
+        logger.exception(
+            "spreadsheet_import id=%s file_sha256=%s target=%s event=exception",
+            import_id,
+            file_digest,
+            options.target,
+        )
+        result = ImportResult(
+            target=options.target,
+            dry_run=options.dry_run,
+            errors=["Erro inesperado ao importar a planilha. Consulte os logs da importacao."],
+        )
+    finally:
+        duration = monotonic() - started_at
+        logger.info(
+            "spreadsheet_import id=%s file_sha256=%s target=%s event=end duration=%.3fs categories=%s exercises=%s marks=%s saved=%s errors=%s",
+            import_id,
+            file_digest,
+            options.target,
+            duration,
+            result.category_count,
+            result.exercise_count,
+            result.mark_count,
+            result.saved,
+            result.has_errors,
+        )
     return result
 
 
 def import_rows(rows: list[dict[str, Any]], options: ImportOptions, sheet_name: str = "") -> ImportResult:
     result = ImportResult(target=options.target, sheet_name=sheet_name, dry_run=options.dry_run)
+    if options.target == TARGET_EXERCISE_TRACKING:
+        result.category_count, result.exercise_count, result.mark_count = _tracking_row_counts(rows)
     importer = _importer_for_target(options.target)
     operations: list[PreparedOperation] = []
-    seen: dict[str, int] = {}
+    seen: dict[str, Any] = {}
+    if options.target == TARGET_EXERCISE_TRACKING:
+        _preload_tracking_preview_cache(seen, rows)
 
     for index, raw_row in enumerate(rows, start=2):
         row = _canonicalize_row(raw_row)
-        operation = importer(row, index, options, seen)
+        row_number = _source_row_number(row, index) if options.target == TARGET_EXERCISE_TRACKING else index
+        operation = importer(row, row_number, options, seen)
         operations.append(operation)
         result.rows.append(operation.preview)
 
@@ -220,7 +273,7 @@ def import_rows(rows: list[dict[str, Any]], options: ImportOptions, sheet_name: 
         return result
 
     try:
-        save_context = _save_context_for_target(options.target)
+        save_context = _save_context_for_target(options.target, rows)
         touched_tracking_procedure_ids: set[int] = set()
         with transaction.atomic():
             for operation in operations:
@@ -242,9 +295,11 @@ def import_rows(rows: list[dict[str, Any]], options: ImportOptions, sheet_name: 
     return result
 
 
-def _save_context_for_target(target: str) -> TrackingImportSaveContext | None:
+def _save_context_for_target(target: str, rows: list[dict[str, Any]] | None = None) -> TrackingImportSaveContext | None:
     if target == TARGET_EXERCISE_TRACKING:
-        return TrackingImportSaveContext()
+        context = TrackingImportSaveContext()
+        _preload_tracking_context(context, rows or [])
+        return context
     return None
 
 
@@ -371,10 +426,10 @@ def _prepare_exercise(row: dict[str, Any], row_number: int, options: ImportOptio
     errors: list[str] = []
     nome = _required_text(row, "nome", errors)
     categoria_nome = _required_text(row, "categoria", errors)
-    _track_unique("exercicio", _key(nome), row_number, seen, errors)
+    _track_unique("exercicio", _exercise_cache_key(categoria_nome, nome), row_number, seen, errors)
 
     categoria = _resolve_category(categoria_nome, options, errors) if categoria_nome else None
-    existing = _find_by_name(ExercicioCatalogo, nome) if nome else None
+    existing = _find_exercise_by_category_name(nome, categoria_nome) if nome and categoria_nome else None
     action = _existing_action(existing, options)
     values = {
         "nome": nome,
@@ -406,7 +461,7 @@ def _prepare_exercise(row: dict[str, Any], row_number: int, options: ImportOptio
 
     def save():
         resolved_categoria = _materialize_related(categoria)
-        obj = existing or ExercicioCatalogo()
+        obj = existing or _find_exercise_by_category(resolved_categoria, nome) or ExercicioCatalogo()
         _assign(obj, {**values, "categoria": resolved_categoria})
         _restore_if_needed(obj)
         obj.full_clean()
@@ -548,13 +603,14 @@ def _prepare_session(row: dict[str, Any], row_number: int, options: ImportOption
     return PreparedOperation(ImportRowResult(row_number, action, display, errors), save=None if errors else save)
 
 
-def _prepare_exercise_tracking(row: dict[str, Any], row_number: int, options: ImportOptions, seen: dict[str, int]):
+def _prepare_exercise_tracking(row: dict[str, Any], row_number: int, options: ImportOptions, seen: dict[str, Any]):
     errors: list[str] = []
-    paciente = _resolve_tracking_patient(row, options, errors)
-    performed_date = _parse_date(row.get("data"), "data", errors)
-    categoria_nome = _text(row.get("categoria")) or "Sem categoria"
+    paciente = _resolve_tracking_patient_cached(row, options, errors, seen)
+    categoria_nome = _text(row.get("categoria"))
     exercicio_nome = _required_text(row, "exercicio", errors)
-    marca = _required_text(row, "marca", errors)
+    if exercicio_nome and not categoria_nome:
+        errors.append(f"Categoria nao encontrada para exercicio {exercicio_nome}.")
+    marcacoes = _tracking_row_marks(row, errors)
     sheet_name = _text(row.get("sheet_name"))
     source_row = _text(row.get("linha_origem"))
 
@@ -562,34 +618,45 @@ def _prepare_exercise_tracking(row: dict[str, Any], row_number: int, options: Im
     _validate_max_length("exercicio", exercicio_nome, 150, errors)
     _validate_tracking_related(categoria_nome, exercicio_nome, paciente, options, errors)
 
-    duplicate_of = None
-    if paciente and performed_date and exercicio_nome:
-        unique_key = f"{_tracking_patient_key(paciente)}:{performed_date.isoformat()}:{_key(exercicio_nome)}"
-        duplicate_of = seen.get(unique_key)
-        if duplicate_of is None:
+    filtered_marks = []
+    duplicate_rows = []
+    if paciente and exercicio_nome:
+        for mark in marcacoes:
+            performed_date = mark.get("data")
+            if not performed_date:
+                continue
+            unique_key = (
+                f"marca:{_tracking_patient_key(paciente)}:{performed_date.isoformat()}:"
+                f"{_exercise_cache_key(categoria_nome, exercicio_nome)}"
+            )
+            duplicate_of = seen.get(unique_key)
+            if duplicate_of is not None:
+                duplicate_rows.append(str(duplicate_of))
+                continue
             seen[unique_key] = row_number
+            filtered_marks.append(mark)
+    else:
+        filtered_marks = marcacoes
+    marcacoes = filtered_marks
 
-    existing = (
-        _find_existing_tracking_mark(paciente, exercicio_nome, performed_date)
-        if isinstance(paciente, Paciente) and performed_date is not None and exercicio_nome
+    existing_exercise = (
+        _tracking_existing_exercise_cached(categoria_nome, exercicio_nome, seen)
+        if categoria_nome and exercicio_nome
         else None
     )
-    action = ACTION_SKIP if duplicate_of is not None else _existing_action(existing, options)
+    action = ACTION_UPDATE if existing_exercise is not None else ACTION_CREATE
     display = {
         "paciente": _format_value(paciente) if paciente else _text(_first(row, "paciente_cpf", "cpf", "paciente_nome")),
-        "data": _format_value(performed_date),
         "categoria": categoria_nome,
         "exercicio": exercicio_nome,
-        "marca": marca,
+        "marcacoes": str(len(marcacoes)),
     }
     if sheet_name:
         display["aba"] = sheet_name
     if source_row:
         display["linha"] = source_row
-    if duplicate_of is not None:
-        display["duplicado_da_linha"] = str(duplicate_of)
-    if action == ACTION_SKIP:
-        return PreparedOperation(ImportRowResult(row_number, action, display, errors))
+    if duplicate_rows:
+        display["marcacoes_duplicadas"] = ", ".join(duplicate_rows)
 
     def save(context: TrackingImportSaveContext):
         resolved_paciente = _materialize_tracking_patient(paciente, context)
@@ -598,18 +665,142 @@ def _prepare_exercise_tracking(row: dict[str, Any], row_number: int, options: Im
         tipo_procedimento = _get_or_create_tracking_procedure_type(context)
         procedimento = _get_or_create_tracking_procedure(resolved_paciente, tipo_procedimento, context)
         procedimento_exercicio = _get_or_create_tracking_procedure_exercise(procedimento, exercicio, context)
-        sessao = _get_or_create_tracking_session(procedimento, performed_date, context)
-        _get_or_create_tracking_session_exercise(
-            sessao,
-            procedimento_exercicio,
-            marca=marca,
-            sheet_name=sheet_name,
-            source_row=source_row,
-            context=context,
-        )
-        return procedimento.pk
+        touched_sessions = False
+        for mark in marcacoes:
+            sessao = _get_or_create_tracking_session(procedimento, mark["data"], context)
+            _get_or_create_tracking_session_exercise(
+                sessao,
+                procedimento_exercicio,
+                marca=mark["marca"],
+                sheet_name=sheet_name,
+                source_row=source_row,
+                context=context,
+            )
+            touched_sessions = True
+        return procedimento.pk if touched_sessions else None
 
     return PreparedOperation(ImportRowResult(row_number, action, display, errors), save=None if errors else save)
+
+
+def _uploaded_file_digest(uploaded_file) -> str:
+    hasher = hashlib.sha256()
+    try:
+        uploaded_file.seek(0)
+    except (AttributeError, OSError):
+        pass
+    if hasattr(uploaded_file, "chunks"):
+        for chunk in uploaded_file.chunks():
+            hasher.update(chunk)
+    else:
+        hasher.update(uploaded_file.read())
+    try:
+        uploaded_file.seek(0)
+    except (AttributeError, OSError):
+        pass
+    return hasher.hexdigest()[:16]
+
+
+def _source_row_number(row: dict[str, Any], default: int) -> int:
+    source_row = _text(row.get("linha_origem"))
+    try:
+        return int(source_row)
+    except ValueError:
+        return default
+
+
+def _tracking_row_counts(rows: list[dict[str, Any]]) -> tuple[int, int, int]:
+    categories = {_key(row.get("categoria")) for row in rows if _text(row.get("categoria"))}
+    exercise_rows = sum(1 for row in rows if _text(row.get("exercicio")))
+    marks = sum(len(row.get("marcacoes") or []) for row in rows)
+    return len(categories), exercise_rows, marks
+
+
+def _tracking_row_marks(row: dict[str, Any], errors: list[str]) -> list[dict[str, Any]]:
+    raw_marks = row.get("marcacoes")
+    if raw_marks is None:
+        marca = _text(row.get("marca"))
+        if not marca:
+            return []
+        performed_date = _parse_date(row.get("data"), "data", errors)
+        return [{"data": performed_date, "marca": marca}] if performed_date else []
+
+    if not isinstance(raw_marks, list):
+        errors.append("marcacoes deve ser uma lista.")
+        return []
+
+    marks = []
+    for index, raw_mark in enumerate(raw_marks, start=1):
+        if not isinstance(raw_mark, dict):
+            errors.append(f"marcacoes[{index}] deve ser um objeto.")
+            continue
+        performed_date = _parse_date(raw_mark.get("data"), f"marcacoes[{index}].data", errors)
+        marca = _text(raw_mark.get("marca"))
+        if not marca:
+            errors.append(f"marcacoes[{index}].marca deve ser informada.")
+            continue
+        if performed_date is not None:
+            marks.append({"data": performed_date, "marca": marca})
+    return marks
+
+
+def _resolve_tracking_patient_cached(
+    row: dict[str, Any],
+    options: ImportOptions,
+    errors: list[str],
+    seen: dict[str, Any],
+) -> Paciente | PendingRelated | None:
+    cpf = _text(_first(row, "paciente_cpf", "cpf"))
+    name = _text(_first(row, "paciente_nome"))
+    cache_key = f"__tracking_patient:{cpf}:{_key(name)}:{options.create_related}"
+    if cache_key in seen:
+        return seen[cache_key]
+    paciente = _resolve_tracking_patient(row, options, errors)
+    seen[cache_key] = paciente
+    return paciente
+
+
+def _preload_tracking_preview_cache(seen: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    canonical_rows = [_canonicalize_row(row) for row in rows]
+    category_names = {_text(row.get("categoria")) for row in canonical_rows if _text(row.get("categoria"))}
+    exercise_names = {_text(row.get("exercicio")) for row in canonical_rows if _text(row.get("exercicio"))}
+    seen["__tracking_existing_exercises"] = {
+        _exercise_cache_key(exercicio.categoria.nome, exercicio.nome): exercicio
+        for exercicio in ExercicioCatalogo.all_objects.filter(
+            categoria__nome__in=category_names,
+            nome__in=exercise_names,
+        ).select_related("categoria")
+    }
+
+
+def _tracking_existing_exercise_cached(categoria_nome: str, exercicio_nome: str, seen: dict[str, Any]):
+    cache = seen.get("__tracking_existing_exercises")
+    if cache is None:
+        return _find_exercise_by_category_name(exercicio_nome, categoria_nome)
+    return cache.get(_exercise_cache_key(categoria_nome, exercicio_nome))
+
+
+def _preload_tracking_context(context: TrackingImportSaveContext, rows: list[dict[str, Any]]) -> None:
+    category_names = {_text(row.get("categoria")) for row in rows if _text(row.get("categoria"))}
+    exercise_names = {_text(row.get("exercicio")) for row in rows if _text(row.get("exercicio"))}
+    patient_names = {_text(row.get("paciente_nome")) for row in rows if _text(row.get("paciente_nome"))}
+    patient_cpfs = {_text(_first(row, "paciente_cpf", "cpf")) for row in rows if _text(_first(row, "paciente_cpf", "cpf"))}
+
+    if category_names:
+        for categoria in CategoriaExercicio.all_objects.filter(nome__in=category_names):
+            context.categories[_key(categoria.nome)] = categoria
+    if category_names and exercise_names:
+        for exercicio in ExercicioCatalogo.all_objects.filter(
+            categoria__nome__in=category_names,
+            nome__in=exercise_names,
+        ).select_related("categoria"):
+            context.exercises[_exercise_cache_key(exercicio.categoria.nome, exercicio.nome)] = exercicio
+    if patient_cpfs:
+        for paciente in Paciente.all_objects.filter(cpf__in=patient_cpfs):
+            _cache_tracking_patient(context, paciente)
+    if patient_names:
+        for paciente in Paciente.all_objects.filter(nome__in=patient_names):
+            _cache_tracking_patient(context, paciente)
+    context.exercises_preloaded = True
 
 
 def _canonicalize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -876,6 +1067,36 @@ def _find_by_name(model, name: str):
     return model.all_objects.filter(nome__iexact=name).first()
 
 
+def _exercise_cache_key(categoria_nome: str, exercicio_nome: str) -> str:
+    return f"{_key(categoria_nome)}:{_key(exercicio_nome)}"
+
+
+def _find_exercise_by_category_name(exercicio_nome: str, categoria_nome: str):
+    if not exercicio_nome or not categoria_nome:
+        return None
+    return (
+        ExercicioCatalogo.all_objects.filter(
+            categoria__nome__iexact=categoria_nome,
+            nome__iexact=exercicio_nome,
+        )
+        .select_related("categoria")
+        .first()
+    )
+
+
+def _find_exercise_by_category(categoria: CategoriaExercicio | None, exercicio_nome: str):
+    if categoria is None or not exercicio_nome:
+        return None
+    return (
+        ExercicioCatalogo.all_objects.filter(
+            categoria=categoria,
+            nome__iexact=exercicio_nome,
+        )
+        .select_related("categoria")
+        .first()
+    )
+
+
 def _resolve_category(name: str, options: ImportOptions, errors: list[str]):
     category = _find_by_name(CategoriaExercicio, name)
     if category:
@@ -1129,10 +1350,11 @@ def _validate_tracking_related(
     if options.create_related:
         return
 
-    if categoria_nome and _find_by_name(CategoriaExercicio, categoria_nome) is None:
+    categoria = _find_by_name(CategoriaExercicio, categoria_nome) if categoria_nome else None
+    if categoria_nome and categoria is None:
         errors.append(f"Categoria nao encontrada: {categoria_nome}.")
-    if exercicio_nome and _find_by_name(ExercicioCatalogo, exercicio_nome) is None:
-        errors.append(f"Exercicio nao encontrado: {exercicio_nome}.")
+    if exercicio_nome and categoria is not None and _find_exercise_by_category(categoria, exercicio_nome) is None:
+        errors.append(f"Exercicio nao encontrado: {categoria_nome} / {exercicio_nome}.")
 
     tipo = _find_by_name(TipoProcedimento, TRACKING_IMPORT_PROCEDURE_TYPE_NAME)
     if tipo is None:
@@ -1141,27 +1363,6 @@ def _validate_tracking_related(
     if isinstance(paciente, Paciente) and not Procedimento.objects.filter(paciente=paciente, tipo_procedimento=tipo).exists():
         errors.append("Procedimento de historico de exercicios nao encontrado.")
 
-
-def _find_existing_tracking_mark(
-    paciente: Paciente,
-    exercicio_nome: str,
-    performed_date: date,
-) -> SessaoExercicio | None:
-    exercicio = _find_by_name(ExercicioCatalogo, exercicio_nome)
-    if exercicio is None:
-        return None
-
-    start_datetime, end_datetime = _day_datetime_range(performed_date)
-    return (
-        SessaoExercicio.all_objects.filter(
-            sessao__procedimento__paciente=paciente,
-            sessao__data_hora__gte=start_datetime,
-            sessao__data_hora__lte=end_datetime,
-            exercicio=exercicio,
-        )
-        .order_by("-is_active", "sessao__data_hora", "pk")
-        .first()
-    )
 
 
 def _get_or_create_tracking_category(
@@ -1189,19 +1390,15 @@ def _get_or_create_tracking_exercise(
     options: ImportOptions,
     context: TrackingImportSaveContext | None = None,
 ) -> ExercicioCatalogo:
-    cache_key = _key(nome)
+    cache_key = _exercise_cache_key(categoria.nome, nome)
     if context is not None and cache_key in context.exercises:
         return context.exercises[cache_key]
 
-    exercicio = _find_by_name(ExercicioCatalogo, nome)
+    exercicio = None if context is not None and context.exercises_preloaded else _find_exercise_by_category(categoria, nome)
     changed = False
     if exercicio is None:
         exercicio = ExercicioCatalogo(nome=nome, categoria=categoria)
         changed = True
-    else:
-        if options.update_existing and exercicio.categoria_id != categoria.pk:
-            exercicio.categoria = categoria
-            changed = True
     _save_tracking_object(exercicio, changed=changed)
     if context is not None:
         context.exercises[cache_key] = exercicio
@@ -1254,7 +1451,23 @@ def _get_or_create_tracking_procedure(
         _save_tracking_object(procedimento)
     if context is not None:
         context.procedures[cache_key] = procedimento
+        _preload_tracking_procedure_exercises(context, procedimento)
     return procedimento
+
+
+def _preload_tracking_procedure_exercises(
+    context: TrackingImportSaveContext,
+    procedimento: Procedimento,
+) -> None:
+    if procedimento.pk in context.preloaded_procedure_exercises:
+        return
+    for procedimento_exercicio in (
+        ProcedimentoExercicio.all_objects.filter(procedimento=procedimento)
+        .select_related("exercicio")
+        .order_by("ordem", "pk")
+    ):
+        context.procedure_exercises[(procedimento.pk, procedimento_exercicio.exercicio_id)] = procedimento_exercicio
+    context.preloaded_procedure_exercises.add(procedimento.pk)
 
 
 def _get_or_create_tracking_procedure_exercise(
@@ -1266,11 +1479,14 @@ def _get_or_create_tracking_procedure_exercise(
     if context is not None and cache_key in context.procedure_exercises:
         return context.procedure_exercises[cache_key]
 
-    procedimento_exercicio = (
-        ProcedimentoExercicio.all_objects.filter(procedimento=procedimento, exercicio=exercicio)
-        .order_by("-is_active", "ordem", "pk")
-        .first()
-    )
+    if context is not None and procedimento.pk in context.preloaded_procedure_exercises:
+        procedimento_exercicio = None
+    else:
+        procedimento_exercicio = (
+            ProcedimentoExercicio.all_objects.filter(procedimento=procedimento, exercicio=exercicio)
+            .order_by("-is_active", "ordem", "pk")
+            .first()
+        )
     if procedimento_exercicio is None:
         next_order = _next_tracking_procedure_exercise_order(procedimento, context)
         procedimento_exercicio = ProcedimentoExercicio(

@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 from core.models import SoftDeleteModel, TimestampedModel
@@ -58,7 +59,7 @@ class ExercicioCatalogo(SoftDeleteModel, TimestampedModel):
         "categoria__is_active": True,
     }
 
-    nome = models.CharField(max_length=150, unique=True)
+    nome = models.CharField(max_length=150)
     categoria = models.ForeignKey(
         CategoriaExercicio,
         on_delete=models.PROTECT,
@@ -76,6 +77,14 @@ class ExercicioCatalogo(SoftDeleteModel, TimestampedModel):
         verbose_name = "Exercício"
         verbose_name_plural = "Exercícios"
         ordering = ["nome"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("nome"),
+                "categoria",
+                condition=models.Q(is_active=True),
+                name="unique_active_exercicio_por_categoria_nome",
+            )
+        ]
 
     def __str__(self):
         return self.nome

@@ -21,6 +21,25 @@ class SpreadsheetData:
     rows: list[dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class MergeRange:
+    start_row: int
+    start_col: int
+    end_row: int
+    end_col: int
+
+
+@dataclass
+class WorksheetRow:
+    row_number: int
+    values: list[Any]
+    merged_ranges: dict[int, MergeRange]
+
+    def __iter__(self):
+        yield self.row_number
+        yield self.values
+
+
 NS_MAIN = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 NS_REL = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
 OFFICE_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -63,7 +82,7 @@ def read_exercise_tracking_spreadsheet(uploaded_file, sheet_name: str = "") -> S
                     rows.extend(sheet_rows)
 
             if not rows:
-                raise SpreadsheetReadError("Nenhuma marca de exercicio foi encontrada nas abas selecionadas.")
+                raise SpreadsheetReadError("Nenhum exercicio foi encontrado nas abas selecionadas.")
 
             _harmonize_tracking_patient_names(rows, _tracking_filename_stem(original_filename))
 
@@ -71,10 +90,9 @@ def read_exercise_tracking_spreadsheet(uploaded_file, sheet_name: str = "") -> S
                 sheet_name=parsed_sheet_names[0] if len(parsed_sheet_names) == 1 else "Todas as abas",
                 headers=[
                     "paciente_nome",
-                    "data",
                     "categoria",
                     "exercicio",
-                    "marca",
+                    "marcacoes",
                     "sheet_name",
                     "linha_origem",
                 ],
@@ -205,29 +223,97 @@ def _worksheet_numbered_rows(
     archive: ZipFile,
     path: str,
     shared_strings: list[str],
-) -> list[tuple[int, list[Any]]]:
+) -> list[WorksheetRow]:
     root = ElementTree.fromstring(archive.read(path))
-    rows = []
+    cell_values: dict[tuple[int, int], Any] = {}
+    row_numbers: set[int] = set()
+
     for row in root.findall("x:sheetData/x:row", NS_MAIN):
-        row_number = int(row.attrib.get("r", len(rows) + 1))
-        values: list[Any] = []
+        row_number = int(row.attrib.get("r", len(row_numbers) + 1))
+        row_numbers.add(row_number)
+        next_column = 1
         for cell in row.findall("x:c", NS_MAIN):
-            column = _cell_column_index(cell.attrib.get("r", "")) or len(values) + 1
-            while len(values) < column - 1:
-                values.append("")
-            values.append(_cell_value(cell, shared_strings))
-        rows.append((row_number, values))
+            column = _cell_column_index(cell.attrib.get("r", "")) or next_column
+            cell_values[(row_number, column)] = _cell_value(cell, shared_strings)
+            next_column = column + 1
+
+    virtual_ranges: dict[tuple[int, int], MergeRange] = {}
+    for merge_range in _worksheet_merged_ranges(root):
+        top_left_value = cell_values.get((merge_range.start_row, merge_range.start_col), "")
+        if not _present(top_left_value):
+            continue
+        for row_number in range(merge_range.start_row, merge_range.end_row + 1):
+            row_numbers.add(row_number)
+            for column in range(merge_range.start_col, merge_range.end_col + 1):
+                key = (row_number, column)
+                if key == (merge_range.start_row, merge_range.start_col):
+                    continue
+                if not _present(cell_values.get(key, "")):
+                    cell_values[key] = top_left_value
+                    virtual_ranges[key] = merge_range
+
+    rows: list[WorksheetRow] = []
+    for row_number in sorted(row_numbers):
+        columns = [column for current_row, column in cell_values if current_row == row_number]
+        max_column = max(columns) if columns else 0
+        values = [cell_values.get((row_number, column), "") for column in range(1, max_column + 1)]
+        merged_ranges = {
+            column - 1: virtual_ranges[(row_number, column)]
+            for column in range(1, max_column + 1)
+            if (row_number, column) in virtual_ranges
+        }
+        rows.append(WorksheetRow(row_number=row_number, values=values, merged_ranges=merged_ranges))
     return rows
+
+
+
+def _worksheet_merged_ranges(root) -> list[MergeRange]:
+    ranges = []
+    for merge_cell in root.findall("x:mergeCells/x:mergeCell", NS_MAIN):
+        reference = merge_cell.attrib.get("ref", "")
+        merge_range = _cell_range(reference)
+        if merge_range is not None:
+            ranges.append(merge_range)
+    return ranges
+
+
+def _cell_range(reference: str) -> MergeRange | None:
+    if not reference:
+        return None
+    parts = reference.split(":", 1)
+    start = _cell_position(parts[0])
+    end = _cell_position(parts[1] if len(parts) > 1 else parts[0])
+    if start is None or end is None:
+        return None
+    start_row, start_col = start
+    end_row, end_col = end
+    return MergeRange(
+        start_row=min(start_row, end_row),
+        start_col=min(start_col, end_col),
+        end_row=max(start_row, end_row),
+        end_col=max(start_col, end_col),
+    )
+
+
+def _cell_position(reference: str) -> tuple[int, int] | None:
+    match = re.match(r"([A-Z]+)(\d+)", reference.upper())
+    if not match:
+        return None
+    return int(match.group(2)), _column_letters_to_index(match.group(1))
+
+
+def _column_letters_to_index(letters: str) -> int:
+    index = 0
+    for char in letters:
+        index = index * 26 + (ord(char) - ord("A") + 1)
+    return index
 
 
 def _cell_column_index(reference: str) -> int | None:
     match = re.match(r"([A-Z]+)", reference.upper())
     if not match:
         return None
-    index = 0
-    for char in match.group(1):
-        index = index * 26 + (ord(char) - ord("A") + 1)
-    return index
+    return _column_letters_to_index(match.group(1))
 
 
 def _cell_value(cell, shared_strings: list[str]) -> Any:
@@ -300,7 +386,7 @@ def _present(value: Any) -> bool:
     return value is not None and str(value).strip() != ""
 
 
-def _exercise_tracking_rows(numbered_rows: list[tuple[int, list[Any]]], sheet_name: str) -> list[dict[str, Any]]:
+def _exercise_tracking_rows(numbered_rows: list[WorksheetRow], sheet_name: str) -> list[dict[str, Any]]:
     date_row_position, date_columns = _find_tracking_date_columns(numbered_rows)
     if date_row_position is None:
         return []
@@ -313,47 +399,102 @@ def _exercise_tracking_rows(numbered_rows: list[tuple[int, list[Any]]], sheet_na
     output_rows: list[dict[str, Any]] = []
     current_category = ""
 
-    for row_number, row in numbered_rows[date_row_position + 1 :]:
+    for worksheet_row in numbered_rows[date_row_position + 1 :]:
+        row_number = worksheet_row.row_number
+        row = worksheet_row.values
         category_text = _tracking_text(_row_value(row, 1))
         exercise_name = _tracking_text(_row_value(row, 2))
+        if _tracking_merged_category_header(worksheet_row, category_text, exercise_name):
+            exercise_name = ""
 
         if _is_tracking_observation_label(category_text) or _is_tracking_observation_label(exercise_name):
             break
 
-        if category_text and not exercise_name:
+        if category_text:
             current_category = category_text
-            continue
 
         if not exercise_name:
             continue
 
-        category_name = category_text or current_category or "Sem categoria"
+        category_name = category_text or current_category
+        if not category_name:
+            raise SpreadsheetReadError(
+                f"Aba '{sheet_name}', linha {row_number}: categoria nao encontrada para exercicio '{exercise_name}'."
+            )
+
+        marks = []
         for column_index, performed_date in date_columns:
+            if _worksheet_virtual_merge(worksheet_row, column_index):
+                continue
             mark = _tracking_text(_row_value(row, column_index))
             if not mark:
                 continue
-            output_rows.append(
-                {
-                    "paciente_nome": patient_name,
-                    "data": performed_date,
-                    "categoria": category_name,
-                    "exercicio": exercise_name,
-                    "marca": mark,
-                    "sheet_name": sheet_name,
-                    "linha_origem": row_number,
-                }
-            )
+            marks.append({"data": performed_date, "marca": mark})
+
+        output_rows.append(
+            {
+                "paciente_nome": patient_name,
+                "categoria": category_name,
+                "exercicio": exercise_name,
+                "marcacoes": marks,
+                "sheet_name": sheet_name,
+                "linha_origem": row_number,
+            }
+        )
 
     return output_rows
 
 
+
+def _tracking_merged_category_header(worksheet_row: WorksheetRow, category_text: str, exercise_name: str) -> bool:
+    category_column = 2
+    exercise_column = 3
+    merge_range = worksheet_row.merged_ranges.get(exercise_column - 1)
+    if _tracking_horizontal_header_merge(merge_range, category_column, exercise_column):
+        return True
+
+    next_cell_merge = worksheet_row.merged_ranges.get(exercise_column)
+    return (
+        _tracking_header_text_matches_category(category_text, exercise_name)
+        and _tracking_horizontal_header_merge(next_cell_merge, exercise_column, exercise_column + 1)
+    )
+
+
+def _tracking_horizontal_header_merge(
+    merge_range: MergeRange | None,
+    start_column_limit: int,
+    covered_column: int,
+) -> bool:
+    if merge_range is None:
+        return False
+    return (
+        merge_range.start_row == merge_range.end_row
+        and merge_range.start_col <= start_column_limit
+        and merge_range.end_col >= covered_column
+    )
+
+
+def _tracking_header_text_matches_category(category_text: str, exercise_name: str) -> bool:
+    category_key = _tracking_normalized_text(category_text)
+    exercise_key = _tracking_normalized_text(exercise_name)
+    if not category_key or not exercise_key:
+        return False
+    return exercise_key == category_key or exercise_key.startswith(f"{category_key}_")
+
+
+def _worksheet_virtual_merge(worksheet_row: WorksheetRow, column_index: int) -> bool:
+    return column_index in worksheet_row.merged_ranges
+
+
 def _find_tracking_date_columns(
-    numbered_rows: list[tuple[int, list[Any]]],
+    numbered_rows: list[WorksheetRow],
 ) -> tuple[int | None, list[tuple[int, date]]]:
-    for row_position, (_row_number, row) in enumerate(numbered_rows):
+    for row_position, worksheet_row in enumerate(numbered_rows):
+        row = worksheet_row.values
         date_columns = [
             (column_index, parsed_date)
             for column_index, value in enumerate(row)
+            if not _worksheet_virtual_merge(worksheet_row, column_index)
             if (parsed_date := _parse_tracking_header_date(value)) is not None
         ]
         if date_columns and any(column_index >= 3 for column_index, _parsed_date in date_columns):

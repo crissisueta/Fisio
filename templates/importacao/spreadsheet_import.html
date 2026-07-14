@@ -9,7 +9,7 @@
 
 <div class="card mb-4">
     <div class="card-body">
-        <form method="post" enctype="multipart/form-data" class="row g-3">
+        <form method="post" enctype="multipart/form-data" class="row g-3" data-import-form>
             {% csrf_token %}
             <div class="col-md-4">
                 <label for="{{ form.target.id_for_label }}" class="form-label">{{ form.target.label }}</label>
@@ -48,7 +48,10 @@
             </div>
 
             <div class="col-12">
-                <button type="submit" class="btn btn-primary">Processar</button>
+                <button type="submit" class="btn btn-primary" data-import-submit>
+                    <span class="spinner-border spinner-border-sm me-2 d-none" aria-hidden="true" data-import-spinner></span>
+                    <span data-import-submit-label>Processar</span>
+                </button>
             </div>
         </form>
     </div>
@@ -67,6 +70,11 @@
             <span class="badge text-bg-success">Criar: {{ result.created_count }}</span>
             <span class="badge text-bg-primary">Atualizar: {{ result.updated_count }}</span>
             <span class="badge text-bg-secondary">Pular: {{ result.skipped_count }}</span>
+            {% if result.target == 'historico_exercicios' %}
+            <span class="badge text-bg-info">Categorias: {{ result.category_count }}</span>
+            <span class="badge text-bg-info">Exercicios: {{ result.exercise_count }}</span>
+            <span class="badge text-bg-info">Marcacoes: {{ result.mark_count }}</span>
+            {% endif %}
         </div>
     </div>
     <div class="card-body">
@@ -125,4 +133,30 @@
 {% endwith %}
 {% endfor %}
 {% endif %}
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('[data-import-form]');
+    if (!form) {
+        return;
+    }
+    form.addEventListener('submit', function () {
+        var submit = form.querySelector('[data-import-submit]');
+        var label = form.querySelector('[data-import-submit-label]');
+        var spinner = form.querySelector('[data-import-spinner]');
+        if (submit) {
+            submit.disabled = true;
+        }
+        if (label) {
+            label.textContent = 'Importando...';
+        }
+        if (spinner) {
+            spinner.classList.remove('d-none');
+        }
+    });
+});
+</script>
 {% endblock %}
