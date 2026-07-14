@@ -1,9 +1,11 @@
 import json
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -118,7 +120,27 @@ class PacienteListView(LoginRequiredMixin, ListView):
     model = Paciente
     template_name = "forms/inscricao_list.html"
     context_object_name = "fichas"
-    paginate_by = 10
+    paginate_by = 100
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        self.search_query = self.request.GET.get("q", "").strip()
+        if self.search_query:
+            queryset = queryset.filter(
+                Q(nome__icontains=self.search_query)
+                | Q(cpf__icontains=self.search_query)
+                | Q(email__icontains=self.search_query)
+                | Q(telefone__icontains=self.search_query)
+                | Q(celular__icontains=self.search_query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        search_query = getattr(self, "search_query", "")
+        context["search_query"] = search_query
+        context["pagination_query"] = f"{urlencode({'q': search_query})}&" if search_query else ""
+        return context
 
 
 class PacienteDetailView(LoginRequiredMixin, DetailView):

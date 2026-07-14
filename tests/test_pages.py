@@ -58,6 +58,34 @@ class PageLoadTests(RegressionBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "+ Novo Procedimento")
 
+    def test_patient_list_paginates_one_hundred_per_page(self):
+        user = self.create_user()
+        for index in range(101):
+            self.create_paciente(nome=f"Paciente Lista {index:03d}")
+        self.client.force_login(user)
+
+        first_page = self.client.get(reverse("inscricao-list"))
+        second_page = self.client.get(reverse("inscricao-list"), {"page": 2})
+
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(first_page.context["paginator"].per_page, 100)
+        self.assertEqual(len(first_page.context["fichas"]), 100)
+        self.assertEqual(len(second_page.context["fichas"]), 1)
+
+    def test_patient_list_search_filters_by_query(self):
+        user = self.create_user()
+        self.create_paciente(nome="Ana Pesquisa", email="ana.pesquisa@example.com")
+        self.create_paciente(nome="Bruno Fora", email="bruno.fora@example.com")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("inscricao-list"), {"q": "ana.pesquisa"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["search_query"], "ana.pesquisa")
+        self.assertContains(response, "Ana Pesquisa")
+        self.assertNotContains(response, "Bruno Fora")
+        self.assertContains(response, 'value="ana.pesquisa"')
+
     def test_calendar_dashboard_can_create_procedure_with_initial_session(self):
         user = self.create_user()
         paciente = self.create_paciente()

@@ -3,10 +3,32 @@
 {% block title %}Pacientes{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-10"><h1>Pacientes</h1></div>
-    <div class="col-md-2 text-md-end"><a href="{% url 'inscricao-create' %}" class="btn btn-success">+ Novo Paciente</a></div>
+<div class="row mb-4 align-items-center g-3">
+    <div class="col-md-6"><h1 class="mb-0">Pacientes</h1></div>
+    <div class="col-md-6 text-md-end"><a href="{% url 'inscricao-create' %}" class="btn btn-success">+ Novo Paciente</a></div>
 </div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-8 col-lg-6">
+        <label for="patient-search" class="form-label">Pesquisar</label>
+        <input
+            type="search"
+            id="patient-search"
+            name="q"
+            value="{{ search_query }}"
+            class="form-control"
+            placeholder="Nome, CPF, e-mail ou telefone"
+        >
+    </div>
+    <div class="col-md-auto">
+        <button type="submit" class="btn btn-primary">Pesquisar</button>
+    </div>
+    {% if search_query %}
+    <div class="col-md-auto">
+        <a href="{% url 'inscricao-list' %}" class="btn btn-outline-secondary">Limpar</a>
+    </div>
+    {% endif %}
+</form>
 
 {% if fichas %}
 <div class="table-responsive">
@@ -41,18 +63,24 @@
 <nav aria-label="Paginação">
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page=1">Primeira</a></li>
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ pagination_query }}page=1">Primeira</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ pagination_query }}page={{ page_obj.previous_page_number }}">Anterior</a></li>
         {% endif %}
         <li class="page-item active"><a class="page-link" href="#">{{ page_obj.number }}</a></li>
         {% if page_obj.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Próxima</a></li>
-            <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Última</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ pagination_query }}page={{ page_obj.next_page_number }}">Próxima</a></li>
+            <li class="page-item"><a class="page-link" href="?{{ pagination_query }}page={{ page_obj.paginator.num_pages }}">Última</a></li>
         {% endif %}
     </ul>
 </nav>
 {% endif %}
 {% else %}
-<div class="alert alert-info" role="alert">Nenhum paciente encontrado. <a href="{% url 'inscricao-create' %}">Criar novo cadastro</a>.</div>
+<div class="alert alert-info" role="alert">
+    {% if search_query %}
+        Nenhum paciente encontrado para a pesquisa informada. <a href="{% url 'inscricao-list' %}">Limpar pesquisa</a>.
+    {% else %}
+        Nenhum paciente encontrado. <a href="{% url 'inscricao-create' %}">Criar novo cadastro</a>.
+    {% endif %}
+</div>
 {% endif %}
 {% endblock %}
