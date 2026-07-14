@@ -180,19 +180,30 @@ class ImportacaoViewTests(TestCase):
         self.assertContains(response, "Importando...")
         self.assertContains(response, "submit.disabled = true")
 
-    def test_staff_can_import_csv(self):
+    def test_import_page_only_shows_exercise_history_import(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
         self.client.force_login(staff)
-        csv_content = (
-            "nome,cpf,email,endereco,bairro,cep,celular,data_nascimento,data_matricula,plano\n"
-            "Ana Lima,111.222.333-44,ana@example.com,\"Rua A, 10\",Centro,40000-000,71999999999,01/02/1990,10/03/2026,Particular\n"
-        ).encode("utf-8")
-        upload = SimpleUploadedFile("pacientes.csv", csv_content, content_type="text/csv")
+
+        response = self.client.get(reverse("spreadsheet-import"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Importar Histórico de Exercícios")
+        self.assertContains(response, "arquivos .xlsx de histórico de exercícios")
+        self.assertNotContains(response, 'name="target"')
+        self.assertNotContains(response, ".csv")
+
+    def test_staff_imports_tracking_xlsx_without_target_field(self):
+        staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
+        self.client.force_login(staff)
+        upload = SimpleUploadedFile(
+            "referencia-anonima.xlsx",
+            _build_reference_tracking_xlsx(date(2026, 7, 6)),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
         response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "pacientes",
                 "arquivo": upload,
                 "update_existing": "on",
                 "create_related": "on",
@@ -201,32 +212,45 @@ class ImportacaoViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Paciente.objects.filter(cpf="111.222.333-44").exists())
+        self.assertContains(response, "referencia-anonima.xlsx")
+        self.assertEqual(CategoriaExercicio.objects.count(), 7)
+        self.assertEqual(ProcedimentoExercicio.objects.count(), 188)
+        self.assertEqual(SessaoExercicio.objects.count(), 4)
 
-    def test_staff_can_import_multiple_csv_files(self):
+    def test_staff_can_import_multiple_tracking_xlsx_files(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
         self.client.force_login(staff)
+        performed_date = date(2026, 7, 6)
         first_upload = SimpleUploadedFile(
-            "pacientes-1.csv",
-            (
-                "nome,cpf,email,endereco,bairro,cep,celular,data_nascimento,data_matricula,plano\n"
-                "Ana Lima,111.222.333-44,ana@example.com,\"Rua A, 10\",Centro,40000-000,71999999999,01/02/1990,10/03/2026,Particular\n"
-            ).encode("utf-8"),
-            content_type="text/csv",
+            "historico-1.xlsx",
+            _build_xlsx_workbook(
+                {
+                    "JUL26": [
+                        ["", "Paciente Um"],
+                        ["", "", "", _excel_serial(performed_date)],
+                        ["", "Solo", "Ponte", "X"],
+                    ]
+                }
+            ),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         second_upload = SimpleUploadedFile(
-            "pacientes-2.csv",
-            (
-                "nome,cpf,email,endereco,bairro,cep,celular,data_nascimento,data_matricula,plano\n"
-                "Bia Souza,222.333.444-55,bia@example.com,\"Rua B, 20\",Centro,40000-001,71888888888,05/06/1985,11/03/2026,Particular\n"
-            ).encode("utf-8"),
-            content_type="text/csv",
+            "historico-2.xlsx",
+            _build_xlsx_workbook(
+                {
+                    "JUL26": [
+                        ["", "Paciente Dois"],
+                        ["", "", "", _excel_serial(performed_date)],
+                        ["", "Solo", "Ponte", "X/"],
+                    ]
+                }
+            ),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
         response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "pacientes",
                 "arquivo": [first_upload, second_upload],
                 "update_existing": "on",
                 "create_related": "on",
@@ -235,28 +259,34 @@ class ImportacaoViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Paciente.objects.filter(cpf="111.222.333-44").exists())
-        self.assertTrue(Paciente.objects.filter(cpf="222.333.444-55").exists())
-        self.assertContains(response, "pacientes-1.csv")
-        self.assertContains(response, "pacientes-2.csv")
+        self.assertContains(response, "historico-1.xlsx")
+        self.assertContains(response, "historico-2.xlsx")
+        self.assertEqual(Paciente.objects.count(), 2)
+        self.assertEqual(ExercicioCatalogo.objects.filter(nome="Ponte", categoria__nome="Solo").count(), 1)
+        self.assertEqual(ProcedimentoExercicio.objects.count(), 2)
+        self.assertEqual(SessaoExercicio.objects.count(), 2)
 
     def test_multiple_upload_reports_success_and_failure_per_file(self):
         staff = User.objects.create_user(username="staff", password="testpass123", is_staff=True)
         self.client.force_login(staff)
         valid_upload = SimpleUploadedFile(
-            "pacientes-validos.csv",
-            (
-                "nome,cpf,email,endereco,bairro,cep,celular,data_nascimento,data_matricula,plano\n"
-                "Ana Lima,111.222.333-44,ana@example.com,\"Rua A, 10\",Centro,40000-000,71999999999,01/02/1990,10/03/2026,Particular\n"
-            ).encode("utf-8"),
-            content_type="text/csv",
+            "historico-valido.xlsx",
+            _build_xlsx_workbook(
+                {
+                    "JUL26": [
+                        ["", "Paciente Valido"],
+                        ["", "", "", _excel_serial(date(2026, 7, 6))],
+                        ["", "Solo", "Ponte", "X"],
+                    ]
+                }
+            ),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        invalid_upload = SimpleUploadedFile("pacientes-invalidos.xlsx", b"nao e xlsx", content_type="application/octet-stream")
+        invalid_upload = SimpleUploadedFile("historico-invalido.xlsx", b"nao e xlsx", content_type="application/octet-stream")
 
         response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "pacientes",
                 "arquivo": [valid_upload, invalid_upload],
                 "update_existing": "on",
                 "create_related": "on",
@@ -265,9 +295,9 @@ class ImportacaoViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Paciente.objects.filter(cpf="111.222.333-44").exists())
-        self.assertContains(response, "pacientes-validos.csv")
-        self.assertContains(response, "pacientes-invalidos.xlsx")
+        self.assertTrue(Paciente.objects.filter(nome="Paciente Valido").exists())
+        self.assertContains(response, "historico-valido.xlsx")
+        self.assertContains(response, "historico-invalido.xlsx")
         self.assertContains(response, "Arquivo XLSX inválido")
         self.assertContains(response, "Importacao com falha em 1 de 2 arquivo(s)")
 
@@ -279,7 +309,6 @@ class ImportacaoViewTests(TestCase):
         response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "historico_exercicios",
                 "arquivo": SimpleUploadedFile(
                     "referencia-anonima.xlsx",
                     content,
@@ -315,7 +344,6 @@ class ImportacaoViewTests(TestCase):
         first_response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "historico_exercicios",
                 "arquivo": SimpleUploadedFile(
                     "referencia-anonima.xlsx",
                     content,
@@ -329,7 +357,6 @@ class ImportacaoViewTests(TestCase):
         second_response = self.client.post(
             reverse("spreadsheet-import"),
             {
-                "target": "historico_exercicios",
                 "arquivo": SimpleUploadedFile(
                     "referencia-anonima.xlsx",
                     content,

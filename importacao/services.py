@@ -36,14 +36,6 @@ TARGET_SESSIONS = "sessoes"
 TARGET_EXERCISE_TRACKING = "historico_exercicios"
 
 TARGET_CHOICES = [
-    (TARGET_PATIENTS, "Pacientes"),
-    (TARGET_PROCEDURE_TYPES, "Tipos de Procedimento"),
-    (TARGET_EVALUATION_TYPES, "Tipos de Avaliacao"),
-    (TARGET_EXERCISE_CATEGORIES, "Categorias de Exercicio"),
-    (TARGET_EXERCISES, "Exercicios"),
-    (TARGET_PROCEDURES, "Procedimentos"),
-    (TARGET_EVALUATIONS, "Avaliacoes"),
-    (TARGET_SESSIONS, "Sessoes"),
     (TARGET_EXERCISE_TRACKING, "Historico de Exercicios"),
 ]
 

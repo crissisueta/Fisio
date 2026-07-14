@@ -4,7 +4,7 @@ from django.shortcuts import redirect
 from django.views.generic.edit import FormView
 
 from .forms import SpreadsheetImportForm
-from .services import ImportOptions, import_uploaded_spreadsheet
+from .services import ImportOptions, TARGET_EXERCISE_TRACKING, import_uploaded_spreadsheet
 
 
 SESSION_RESULTS_KEY = "spreadsheet_import_results"
@@ -31,7 +31,7 @@ class SpreadsheetImportView(StaffOnlyMixin, FormView):
 
     def form_valid(self, form):
         options = ImportOptions(
-            target=form.cleaned_data["target"],
+            target=TARGET_EXERCISE_TRACKING,
             update_existing=form.cleaned_data["update_existing"],
             create_related=form.cleaned_data["create_related"],
             dry_run=form.cleaned_data["dry_run"],

@@ -1,8 +1,5 @@
 from django import forms
 
-from .services import TARGET_CHOICES
-
-
 class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
@@ -18,14 +15,9 @@ class MultipleFileField(forms.FileField):
 
 
 class SpreadsheetImportForm(forms.Form):
-    target = forms.ChoiceField(
-        choices=TARGET_CHOICES,
-        label="Destino",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
     arquivo = MultipleFileField(
-        label="Arquivos",
-        widget=MultipleFileInput(attrs={"class": "form-control", "accept": ".xlsx,.csv", "multiple": True}),
+        label="Planilhas",
+        widget=MultipleFileInput(attrs={"class": "form-control", "accept": ".xlsx", "multiple": True}),
     )
     sheet_name = forms.CharField(
         required=False,
@@ -55,6 +47,6 @@ class SpreadsheetImportForm(forms.Form):
         arquivos = self.cleaned_data["arquivo"]
         for arquivo in arquivos:
             name = arquivo.name.lower()
-            if not (name.endswith(".xlsx") or name.endswith(".csv")):
-                raise forms.ValidationError("Envie apenas arquivos .xlsx ou .csv.")
+            if not name.endswith(".xlsx"):
+                raise forms.ValidationError("Envie apenas arquivos .xlsx.")
         return arquivos

@@ -1,28 +1,23 @@
 {% extends 'base.html' %}
 
-{% block title %}Importar Planilha{% endblock %}
+{% block title %}Importar Histórico de Exercícios{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Importar Planilha</h1>
+    <h1>Importar Histórico de Exercícios</h1>
 </div>
 
 <div class="card mb-4">
     <div class="card-body">
         <form method="post" enctype="multipart/form-data" class="row g-3" data-import-form>
             {% csrf_token %}
-            <div class="col-md-4">
-                <label for="{{ form.target.id_for_label }}" class="form-label">{{ form.target.label }}</label>
-                {{ form.target }}
-                {% if form.target.errors %}<div class="invalid-feedback d-block">{{ form.target.errors }}</div>{% endif %}
-            </div>
-            <div class="col-md-5">
+            <div class="col-md-6">
                 <label for="{{ form.arquivo.id_for_label }}" class="form-label">{{ form.arquivo.label }}</label>
                 {{ form.arquivo }}
-                <div class="form-text">Selecione um ou mais arquivos .xlsx ou .csv.</div>
+                <div class="form-text">Selecione um ou mais arquivos .xlsx de histórico de exercícios.</div>
                 {% if form.arquivo.errors %}<div class="invalid-feedback d-block">{{ form.arquivo.errors }}</div>{% endif %}
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6">
                 <label for="{{ form.sheet_name.id_for_label }}" class="form-label">{{ form.sheet_name.label }}</label>
                 {{ form.sheet_name }}
                 {% if form.sheet_name.errors %}<div class="invalid-feedback d-block">{{ form.sheet_name.errors }}</div>{% endif %}
@@ -70,11 +65,9 @@
             <span class="badge text-bg-success">Criar: {{ result.created_count }}</span>
             <span class="badge text-bg-primary">Atualizar: {{ result.updated_count }}</span>
             <span class="badge text-bg-secondary">Pular: {{ result.skipped_count }}</span>
-            {% if result.target == 'historico_exercicios' %}
             <span class="badge text-bg-info">Categorias: {{ result.category_count }}</span>
             <span class="badge text-bg-info">Exercicios: {{ result.exercise_count }}</span>
             <span class="badge text-bg-info">Marcacoes: {{ result.mark_count }}</span>
-            {% endif %}
         </div>
     </div>
     <div class="card-body">
