@@ -8,6 +8,8 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView
 
 from core.mixins import InternalPermissionMixin, SoftDeleteSuccessMessageMixin
+from core.models import ActivityLog
+from core.services.activity import log_activity
 from ..forms import ProcedimentoBulkScheduleForm, ProcedimentoForm, TipoProcedimentoForm
 from ..models import Procedimento, TipoProcedimento
 from ..selectors import (
@@ -71,7 +73,19 @@ class ProcedimentoUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Procedimento atualizado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="procedure.updated",
+            message=f"atualizou procedimento de {self.object.paciente.nome}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata={
+                "procedure_id": self.object.pk,
+                "patient_id": self.object.paciente_id,
+                "procedure_type_id": self.object.tipo_procedimento_id,
+            },
+        )
+        return response
 
 
 class ProcedimentoDeleteView(SoftDeleteSuccessMessageMixin, LoginRequiredMixin, DeleteView):
@@ -79,6 +93,25 @@ class ProcedimentoDeleteView(SoftDeleteSuccessMessageMixin, LoginRequiredMixin, 
     template_name = "forms/procedure_confirm_delete.html"
     success_url = reverse_lazy("procedure-list")
     delete_success_message = "Procedimento removido com sucesso."
+
+    def form_valid(self, form):
+        procedure_id = self.object.pk
+        patient_id = self.object.paciente_id
+        patient_name = self.object.paciente.nome
+        procedure_type_id = self.object.tipo_procedimento_id
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="procedure.deleted",
+            message=f"removeu procedimento de {patient_name}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata={
+                "procedure_id": procedure_id,
+                "patient_id": patient_id,
+                "procedure_type_id": procedure_type_id,
+            },
+        )
+        return response
 
 
 class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
@@ -134,6 +167,20 @@ class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
                 f"{len(result.skipped_conflicts)} sessão(ões) foram ignoradas por conflito de horário: {skipped_labels}.",
             )
 
+        if result.created_sessions:
+            log_activity(
+                user=self.request.user,
+                event_type="session.bulk_created",
+                message=f"criou {len(result.created_sessions)} sessões para {self.procedimento.paciente.nome}",
+                level=ActivityLog.LEVEL_SUCCESS,
+                metadata={
+                    "procedure_id": self.procedimento.pk,
+                    "patient_id": self.procedimento.paciente_id,
+                    "created_count": len(result.created_sessions),
+                    "skipped_conflicts": len(result.skipped_conflicts),
+                },
+            )
+
         return redirect("procedure-detail", pk=self.procedimento.pk)
 
 
@@ -141,7 +188,7 @@ class ProcedimentoBulkScheduleView(LoginRequiredMixin, FormView):
 @require_POST
 def toggle_procedimento_concluido(request, pk):
     procedimento = get_object_or_404(Procedimento, pk=pk)
-    toggle_procedure_completion(procedimento)
+    toggle_procedure_completion(procedimento, activity_user=request.user)
     estado = "concluído" if procedimento.concluido else "pendente"
     messages.success(request, f"Procedimento marcado como {estado}.")
     return redirect("procedure-detail", pk=procedimento.pk)
@@ -173,7 +220,15 @@ class TipoProcedimentoCreateView(InternalPermissionMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Tipo de procedimento cadastrado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.procedure_type.created",
+            message=f"cadastrou tipo de procedimento {self.object.nome}",
+            level=ActivityLog.LEVEL_SUCCESS,
+            metadata={"procedure_type_id": self.object.pk},
+        )
+        return response
 
 
 class TipoProcedimentoUpdateView(InternalPermissionMixin, UpdateView):
@@ -186,7 +241,15 @@ class TipoProcedimentoUpdateView(InternalPermissionMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Tipo de procedimento atualizado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.procedure_type.updated",
+            message=f"atualizou tipo de procedimento {self.object.nome}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata={"procedure_type_id": self.object.pk},
+        )
+        return response
 
 
 class TipoProcedimentoDeleteView(SoftDeleteSuccessMessageMixin, InternalPermissionMixin, DeleteView):
@@ -196,3 +259,16 @@ class TipoProcedimentoDeleteView(SoftDeleteSuccessMessageMixin, InternalPermissi
     permission_required = "procedimentos.delete_tipoprocedimento"
     queryset = TipoProcedimento.all_objects.all()
     delete_success_message = "Tipo de procedimento desativado com sucesso."
+
+    def form_valid(self, form):
+        procedure_type_id = self.object.pk
+        procedure_type_name = self.object.nome
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.procedure_type.deleted",
+            message=f"desativou tipo de procedimento {procedure_type_name}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata={"procedure_type_id": procedure_type_id},
+        )
+        return response

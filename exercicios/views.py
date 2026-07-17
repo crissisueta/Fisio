@@ -6,6 +6,8 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from core.mixins import InternalPermissionMixin, SoftDeleteSuccessMessageMixin
+from core.models import ActivityLog
+from core.services.activity import log_activity
 from procedimentos.models import Sessao
 from .forms import CategoriaExercicioForm, ExercicioCatalogoForm, SessaoExercicioSelectionForm
 from .models import CategoriaExercicio, ExercicioCatalogo
@@ -62,7 +64,15 @@ class CategoriaExercicioCreateView(InternalPermissionMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Categoria de exercício cadastrada com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise_category.created",
+            message=f"cadastrou categoria de exercício {self.object.nome}",
+            level=ActivityLog.LEVEL_SUCCESS,
+            metadata={"exercise_category_id": self.object.pk},
+        )
+        return response
 
 
 class CategoriaExercicioUpdateView(InternalPermissionMixin, UpdateView):
@@ -75,7 +85,15 @@ class CategoriaExercicioUpdateView(InternalPermissionMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Categoria de exercício atualizada com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise_category.updated",
+            message=f"atualizou categoria de exercício {self.object.nome}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata={"exercise_category_id": self.object.pk},
+        )
+        return response
 
 
 class CategoriaExercicioDeleteView(SoftDeleteSuccessMessageMixin, InternalPermissionMixin, DeleteView):
@@ -85,6 +103,19 @@ class CategoriaExercicioDeleteView(SoftDeleteSuccessMessageMixin, InternalPermis
     permission_required = "exercicios.delete_categoriaexercicio"
     queryset = CategoriaExercicio.all_objects.all()
     delete_success_message = "Categoria de exercício desativada com sucesso."
+
+    def form_valid(self, form):
+        category_id = self.object.pk
+        category_name = self.object.nome
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise_category.deleted",
+            message=f"desativou categoria de exercício {category_name}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata={"exercise_category_id": category_id},
+        )
+        return response
 
 
 class ExercicioCatalogoListView(InternalPermissionMixin, ListView):
@@ -115,7 +146,15 @@ class ExercicioCatalogoCreateView(InternalPermissionMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Exercício cadastrado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise.created",
+            message=f"cadastrou exercício {self.object.nome}",
+            level=ActivityLog.LEVEL_SUCCESS,
+            metadata={"exercise_id": self.object.pk, "exercise_category_id": self.object.categoria_id},
+        )
+        return response
 
 
 class ExercicioCatalogoUpdateView(InternalPermissionMixin, UpdateView):
@@ -128,7 +167,15 @@ class ExercicioCatalogoUpdateView(InternalPermissionMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Exercício atualizado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise.updated",
+            message=f"atualizou exercício {self.object.nome}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata={"exercise_id": self.object.pk, "exercise_category_id": self.object.categoria_id},
+        )
+        return response
 
 
 class ExercicioCatalogoDeleteView(SoftDeleteSuccessMessageMixin, InternalPermissionMixin, DeleteView):
@@ -138,4 +185,18 @@ class ExercicioCatalogoDeleteView(SoftDeleteSuccessMessageMixin, InternalPermiss
     permission_required = "exercicios.delete_exerciciocatalogo"
     queryset = ExercicioCatalogo.all_objects.select_related("categoria")
     delete_success_message = "Exercício desativado com sucesso."
+
+    def form_valid(self, form):
+        exercise_id = self.object.pk
+        exercise_name = self.object.nome
+        category_id = self.object.categoria_id
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="admin.exercise.deleted",
+            message=f"desativou exercício {exercise_name}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata={"exercise_id": exercise_id, "exercise_category_id": category_id},
+        )
+        return response
 

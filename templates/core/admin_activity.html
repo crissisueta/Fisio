@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Atividades do sistema{% endblock %}
+
+{% block extra_css %}
+<style>
+    .activity-page { max-width: 860px; }
+    .activity-page h1 { font-size: 1.65rem; }
+    .activity-day { margin-top: 1.35rem; }
+    .activity-day:first-child { margin-top: 0; }
+    .activity-date { color: #6c757d; font-size: 0.88rem; font-weight: 700; margin-bottom: 0.65rem; }
+    .activity-list { display: grid; gap: 0.7rem; }
+    .activity-entry {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-left: 5px solid #6c757d;
+        border-radius: 0.45rem;
+        padding: 0.85rem 0.95rem;
+    }
+    .activity-entry--success { border-left-color: #198754; }
+    .activity-entry--warning { border-left-color: #ffc107; }
+    .activity-entry--error { border-left-color: #dc3545; }
+    .activity-entry--info { border-left-color: var(--app-primary); }
+    .activity-entry-header {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.65rem;
+        margin-bottom: 0.35rem;
+    }
+    .activity-time { color: #495057; font-size: 0.88rem; font-weight: 700; }
+    .activity-actor { color: #212529; font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
+    .activity-level { font-size: 0.72rem; }
+    .activity-message { font-size: 1rem; line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
+    .activity-empty { background: #fff; border: 1px solid #e9ecef; border-radius: 0.45rem; padding: 1rem; }
+    .activity-pagination { margin-top: 1.35rem; }
+
+    @media (max-width: 575.98px) {
+        .activity-page h1 { font-size: 1.35rem; }
+        .activity-entry { padding: 0.8rem; }
+        .activity-message { font-size: 0.96rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="activity-page">
+    <div class="mb-4">
+        <h1 class="mb-1">Atividades do sistema</h1>
+        <p class="text-muted mb-0">Ações administrativas e operacionais recentes.</p>
+    </div>
+
+    {% if activity_groups %}
+        {% for group in activity_groups %}
+        <section class="activity-day" aria-labelledby="activity-date-{{ forloop.counter }}">
+            <h2 class="activity-date" id="activity-date-{{ forloop.counter }}">{{ group.date_label }}</h2>
+            <div class="activity-list">
+                {% for entry in group.entries %}
+                <article class="activity-entry activity-entry--{{ entry.level }}">
+                    <div class="activity-entry-header">
+                        <span class="activity-time">{{ entry.local_time_label }}</span>
+                        <span class="activity-actor">{{ entry.actor_name }}</span>
+                        <span class="badge activity-level {% if entry.level == 'success' %}bg-success{% elif entry.level == 'warning' %}bg-warning text-dark{% elif entry.level == 'error' %}bg-danger{% else %}bg-primary{% endif %}">{{ entry.get_level_display }}</span>
+                    </div>
+                    <p class="activity-message">{{ entry.message }}</p>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+
+        {% if is_paginated %}
+        <nav class="activity-pagination" aria-label="Paginação de atividades">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                {% if page_obj.has_previous %}
+                <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.previous_page_number }}">Mais recentes</a>
+                {% else %}
+                <span></span>
+                {% endif %}
+                <span class="text-muted small align-self-center">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}
+                <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.next_page_number }}">Mais antigas</a>
+                {% endif %}
+            </div>
+        </nav>
+        {% endif %}
+    {% else %}
+        <div class="activity-empty text-muted">Nenhuma atividade registrada ainda.</div>
+    {% endif %}
+</div>
+{% endblock %}

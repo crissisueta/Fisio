@@ -3,6 +3,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect
 from django.views.generic.edit import FormView
 
+from core.models import ActivityLog
+from core.services.activity import log_activity
 from .forms import SpreadsheetImportForm
 from .services import ImportOptions, TARGET_EXERCISE_TRACKING, import_uploaded_spreadsheet
 
@@ -49,6 +51,7 @@ class SpreadsheetImportView(StaffOnlyMixin, FormView):
         ]
         self.request.session[SESSION_RESULTS_KEY] = _serialize_import_results(results)
         _add_import_messages(self.request, options, results)
+        _log_import_activity(self.request.user, options, results)
         return redirect(self.get_success_url())
 
 
@@ -107,3 +110,72 @@ def _add_import_messages(request, options: ImportOptions, results) -> None:
         messages.success(request, "Importacao concluida.")
     else:
         messages.info(request, "Nenhuma alteracao foi salva.")
+
+
+def _log_import_activity(user, options: ImportOptions, results) -> None:
+    if not results:
+        return
+
+    total_count = len(results)
+    failed_count = sum(1 for item in results if item["result"].has_errors)
+    saved_count = sum(1 for item in results if item["result"].saved)
+    created_count = sum(item["result"].created_count for item in results)
+    updated_count = sum(item["result"].updated_count for item in results)
+    mark_count = sum(item["result"].mark_count for item in results)
+
+    metadata = {
+        "target": options.target,
+        "dry_run": options.dry_run,
+        "file_count": total_count,
+        "failed_count": failed_count,
+        "saved_count": saved_count,
+        "created_count": created_count,
+        "updated_count": updated_count,
+        "mark_count": mark_count,
+    }
+
+    if failed_count:
+        if total_count == 1:
+            message = "teve falha ao importar uma planilha"
+        else:
+            message = f"teve falha ao importar {failed_count} de {total_count} planilhas"
+        log_activity(
+            user=user,
+            event_type="spreadsheet_import.failed",
+            message=message,
+            level=ActivityLog.LEVEL_ERROR,
+            metadata=metadata,
+        )
+        return
+
+    if options.dry_run:
+        log_activity(
+            user=user,
+            event_type="spreadsheet_import.simulated",
+            message=f"simulou a importação de {_pluralize(total_count, 'planilha', 'planilhas')}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata=metadata,
+        )
+        return
+
+    if saved_count:
+        log_activity(
+            user=user,
+            event_type="spreadsheet_import.success",
+            message=f"importou {_pluralize(saved_count, 'planilha', 'planilhas')}",
+            level=ActivityLog.LEVEL_SUCCESS,
+            metadata=metadata,
+        )
+        return
+
+    log_activity(
+        user=user,
+        event_type="spreadsheet_import.no_changes",
+        message="concluiu uma importação sem alterações",
+        level=ActivityLog.LEVEL_INFO,
+        metadata=metadata,
+    )
+
+
+def _pluralize(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"

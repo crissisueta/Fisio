@@ -8,6 +8,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from core.models import ActivityLog
+from core.services.activity import log_activity
 from core.utils.datetime import ensure_aware_datetime, duration_minutes_for_times
 from ..models import Procedimento, Sessao
 
@@ -106,6 +108,7 @@ def create_session_for_procedimento(
     status: str = Sessao.STATUS_AGENDADA,
     assinatura_confirmada: bool = False,
     observacoes: str = "",
+    activity_user=None,
 ) -> Sessao:
     aware_datetime = ensure_aware_datetime(data_hora)
     validate_session_conflict(start=aware_datetime, duration_minutes=duracao_minutos)
@@ -120,6 +123,7 @@ def create_session_for_procedimento(
     )
     resequence_sessoes(procedimento)
     sessao.refresh_from_db(fields=["numero"])
+    _log_session_created(sessao, activity_user)
     return sessao
 
 
@@ -132,8 +136,12 @@ def update_sessao(
     status: str,
     assinatura_confirmada: bool,
     observacoes: str,
+    activity_user=None,
 ) -> Sessao:
     aware_datetime = ensure_aware_datetime(data_hora)
+    old_data_hora = sessao.data_hora
+    old_duration_minutes = sessao.duracao_minutos
+    old_status = sessao.status
     validate_session_conflict(
         start=aware_datetime,
         duration_minutes=duracao_minutos,
@@ -150,6 +158,13 @@ def update_sessao(
     )
     resequence_sessoes(sessao.procedimento_id)
     sessao.refresh_from_db(fields=["numero"])
+    _log_session_update(
+        sessao,
+        activity_user,
+        old_data_hora=old_data_hora,
+        old_duration_minutes=old_duration_minutes,
+        old_status=old_status,
+    )
     return sessao
 
 
@@ -158,11 +173,13 @@ def create_initial_session_for_procedure(
     *,
     data_hora: datetime,
     duracao_minutos: int,
+    activity_user=None,
 ) -> Sessao:
     return create_session_for_procedimento(
         procedimento,
         data_hora=data_hora,
         duracao_minutos=duracao_minutos,
+        activity_user=activity_user,
     )
 
 
@@ -210,3 +227,72 @@ def generate_sessions_for_month_by_weekday(
         created_sessions=created_sessions,
         skipped_conflicts=skipped_conflicts,
     )
+
+
+def _log_session_created(sessao: Sessao, user) -> None:
+    if not user:
+        return
+    log_activity(
+        user=user,
+        event_type="session.created",
+        message=f"criou sessão para {_session_patient_name(sessao)}",
+        level=ActivityLog.LEVEL_SUCCESS,
+        metadata=_session_activity_metadata(sessao),
+    )
+
+
+def _log_session_update(
+    sessao: Sessao,
+    user,
+    *,
+    old_data_hora: datetime,
+    old_duration_minutes: int,
+    old_status: str,
+) -> None:
+    if not user:
+        return
+
+    if old_status != sessao.status and sessao.status == Sessao.STATUS_CANCELADA:
+        log_activity(
+            user=user,
+            event_type="session.cancelled",
+            message=f"cancelou sessão de {_session_patient_name(sessao)}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata=_session_activity_metadata(sessao, old_status=old_status),
+        )
+        return
+
+    if old_data_hora != sessao.data_hora or old_duration_minutes != sessao.duracao_minutos:
+        log_activity(
+            user=user,
+            event_type="session.rescheduled",
+            message=f"reagendou sessão de {_session_patient_name(sessao)}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata=_session_activity_metadata(sessao),
+        )
+        return
+
+    if old_status != sessao.status:
+        log_activity(
+            user=user,
+            event_type="session.status_updated",
+            message=f"alterou status da sessão de {_session_patient_name(sessao)}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata=_session_activity_metadata(sessao, old_status=old_status),
+        )
+
+
+def _session_patient_name(sessao: Sessao) -> str:
+    return sessao.procedimento.paciente.nome
+
+
+def _session_activity_metadata(sessao: Sessao, **extra) -> dict:
+    metadata = {
+        "session_id": sessao.pk,
+        "procedure_id": sessao.procedimento_id,
+        "patient_id": sessao.procedimento.paciente_id,
+        "status": sessao.status,
+        "scheduled_at": sessao.data_hora.isoformat(),
+    }
+    metadata.update(extra)
+    return metadata

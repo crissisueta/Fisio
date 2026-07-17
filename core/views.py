@@ -2,12 +2,16 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
 from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.generic import ListView
 
 from .forms import FeedbackForm
+from .models import ActivityLog
 
 
 logger = logging.getLogger(__name__)
@@ -98,3 +102,48 @@ def submit_feedback(request):
         )
 
     return JsonResponse({"ok": True, "message": "Obrigado. Feedback enviado."})
+
+
+class AdminActivityLogView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ActivityLog
+    template_name = "core/admin_activity.html"
+    context_object_name = "activity_entries"
+    paginate_by = 50
+
+    def test_func(self):
+        return self.request.user.is_staff or self.request.user.is_superuser
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            raise PermissionDenied
+        return super().handle_no_permission()
+
+    def get_queryset(self):
+        return ActivityLog.objects.select_related("user").order_by("-created_at")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity_groups"] = _group_activity_entries_by_local_date(context["activity_entries"])
+        return context
+
+
+def _group_activity_entries_by_local_date(entries):
+    groups = []
+    current_group = None
+
+    for entry in entries:
+        local_created_at = timezone.localtime(entry.created_at)
+        entry.local_time_label = local_created_at.strftime("%H:%M")
+        entry_date = local_created_at.date()
+
+        if current_group is None or current_group["date"] != entry_date:
+            current_group = {
+                "date": entry_date,
+                "date_label": local_created_at.strftime("%d/%m/%Y"),
+                "entries": [],
+            }
+            groups.append(current_group)
+
+        current_group["entries"].append(entry)
+
+    return groups

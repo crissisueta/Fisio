@@ -459,11 +459,30 @@
         new bootstrap.Popover(element);
     });
 
+    var exerciseTrackingExpandedStorageKey = 'patientExerciseTrackingExpanded:{{ ficha.pk }}';
+
+    function rememberExerciseTrackingExpanded(expanded) {
+        try {
+            sessionStorage.setItem(exerciseTrackingExpandedStorageKey, expanded ? '1' : '0');
+        } catch (error) {
+            return;
+        }
+    }
+
+    function shouldRestoreExerciseTrackingExpanded() {
+        try {
+            return sessionStorage.getItem(exerciseTrackingExpandedStorageKey) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
     function setExerciseTrackingExpanded(card, button, expanded) {
         card.classList.toggle('is-expanded', expanded);
         document.body.classList.toggle('exercise-tracking-expanded', expanded);
         button.setAttribute('aria-pressed', expanded ? 'true' : 'false');
         button.textContent = expanded ? 'Reduzir' : 'Ampliar';
+        rememberExerciseTrackingExpanded(expanded);
     }
 
     function collapseExpandedExerciseTrackingCards() {
@@ -476,8 +495,12 @@
     }
 
     document.querySelectorAll('[data-exercise-tracking-expand]').forEach(function (button) {
+        var card = button.closest('[data-exercise-tracking-card]');
+        if (card && shouldRestoreExerciseTrackingExpanded()) {
+            setExerciseTrackingExpanded(card, button, true);
+        }
+
         button.addEventListener('click', function () {
-            var card = button.closest('[data-exercise-tracking-card]');
             if (!card) {
                 return;
             }

@@ -21,6 +21,7 @@ class ProcedureCreateFlowMixin:
                 create_initial_session=schedule_initial,
                 initial_session_datetime=form.get_initial_session_datetime() if schedule_initial else None,
                 initial_session_duration_minutes=form.get_initial_session_duration_minutes() if schedule_initial else None,
+                activity_user=self.request.user,
             )
             self.object = result.procedimento
         except ValidationError as exc:

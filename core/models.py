@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -94,3 +95,51 @@ class SoftDeleteModel(models.Model):
 
         self.save(update_fields=update_fields)
 
+
+
+class ActivityLog(models.Model):
+    """Registro simples de ações importantes do sistema."""
+
+    LEVEL_INFO = "info"
+    LEVEL_SUCCESS = "success"
+    LEVEL_WARNING = "warning"
+    LEVEL_ERROR = "error"
+
+    LEVEL_CHOICES = [
+        (LEVEL_INFO, "Info"),
+        (LEVEL_SUCCESS, "Success"),
+        (LEVEL_WARNING, "Warning"),
+        (LEVEL_ERROR, "Error"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activity_logs",
+    )
+    event_type = models.CharField(max_length=100)
+    message = models.CharField(max_length=500)
+    level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default=LEVEL_INFO)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["event_type"]),
+        ]
+        verbose_name = "Registro de atividade"
+        verbose_name_plural = "Registros de atividade"
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} - {self.message}"
+
+    @property
+    def actor_name(self):
+        if not self.user_id or not self.user:
+            return "Sistema"
+        full_name = self.user.get_full_name().strip()
+        return full_name or self.user.get_username()

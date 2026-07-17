@@ -14,6 +14,8 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from core.mixins import SoftDeleteSuccessMessageMixin
+from core.models import ActivityLog
+from core.services.activity import log_activity
 from exercicios.presenters.monthly_tracking import present_monthly_tracking_table
 from exercicios.services.monthly_tracking import (
     build_monthly_exercise_tracking_table,
@@ -166,7 +168,15 @@ class PacienteCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Paciente cadastrado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="patient.created",
+            message=f"cadastrou paciente {self.object.nome}",
+            level=ActivityLog.LEVEL_SUCCESS,
+            metadata={"patient_id": self.object.pk},
+        )
+        return response
 
 
 class PacienteUpdateView(LoginRequiredMixin, UpdateView):
@@ -177,7 +187,15 @@ class PacienteUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "Cadastro do paciente atualizado com sucesso.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="patient.updated",
+            message=f"atualizou cadastro de {self.object.nome}",
+            level=ActivityLog.LEVEL_INFO,
+            metadata={"patient_id": self.object.pk},
+        )
+        return response
 
 
 class PacienteDeleteView(SoftDeleteSuccessMessageMixin, LoginRequiredMixin, DeleteView):
@@ -185,3 +203,16 @@ class PacienteDeleteView(SoftDeleteSuccessMessageMixin, LoginRequiredMixin, Dele
     template_name = "forms/inscricao_confirm_delete.html"
     success_url = reverse_lazy("inscricao-list")
     delete_success_message = "Paciente removido com sucesso."
+
+    def form_valid(self, form):
+        patient_id = self.object.pk
+        patient_name = self.object.nome
+        response = super().form_valid(form)
+        log_activity(
+            user=self.request.user,
+            event_type="patient.deleted",
+            message=f"removeu paciente {patient_name}",
+            level=ActivityLog.LEVEL_WARNING,
+            metadata={"patient_id": patient_id},
+        )
+        return response
