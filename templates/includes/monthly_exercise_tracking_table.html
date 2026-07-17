@@ -18,6 +18,14 @@
                     >
                     <label class="form-check-label small" for="hideEmptyPastExerciseDays">Ocultar dias passados vazios</label>
                 </div>
+                <button
+                    class="btn btn-sm btn-outline-primary exercise-tracking-expand-button"
+                    type="button"
+                    aria-pressed="false"
+                    data-exercise-tracking-expand
+                >
+                    Ampliar
+                </button>
                 <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.previous_month_param }}">Mês anterior</a>
                 <span class="badge bg-light text-dark border">{{ exercise_tracking.month_label }}</span>
                 <a class="btn btn-sm btn-outline-secondary" href="?month={{ exercise_tracking.next_month_param }}">Próximo mês</a>
