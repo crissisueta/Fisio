@@ -85,6 +85,52 @@ class ActivityLogPageTests(RegressionBaseTestCase):
         self.assertTrue(first_page.context["page_obj"].has_next())
         self.assertEqual(len(second_page.context["activity_entries"]), 1)
 
+    def test_regular_user_activity_is_logged_but_only_admin_can_view_page(self):
+        user = self.create_user()
+        user.first_name = "Ana"
+        user.last_name = "Costa"
+        user.save(update_fields=["first_name", "last_name"])
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("inscricao-create"),
+            {
+                "nome": "Paciente Usuario Comum",
+                "cpf": "123.456.789-00",
+                "email": "comum@example.com",
+                "profissao": "Professor",
+                "endereco": "Rua A, 10",
+                "bairro": "Centro",
+                "cep": "40000-000",
+                "telefone": "7133333333",
+                "celular": "71999999999",
+                "telefone_comercial": "",
+                "data_nascimento": "1990-01-01",
+                "data_matricula": "2026-07-17",
+                "plano": "Particular",
+                "observacoes": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ActivityLog.objects.count(), 1)
+        entry = ActivityLog.objects.get()
+        self.assertEqual(entry.user, user)
+        self.assertEqual(entry.actor_name, "Ana Costa")
+        self.assertEqual(entry.event_type, "patient.created")
+        self.assertEqual(entry.message, "cadastrou paciente Paciente Usuario Comum")
+
+        response = self.client.get(reverse("admin-activity"))
+        self.assertEqual(response.status_code, 403)
+
+        admin = self.create_staff_user()
+        self.client.force_login(admin)
+        response = self.client.get(reverse("admin-activity"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ana Costa")
+        self.assertContains(response, "cadastrou paciente Paciente Usuario Comum")
+
     def test_successful_spreadsheet_import_creates_one_activity_entry(self):
         staff = self.create_staff_user(first_name="João", last_name="Silva")
         self.client.force_login(staff)
