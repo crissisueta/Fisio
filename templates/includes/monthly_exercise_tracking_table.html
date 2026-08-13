@@ -86,7 +86,7 @@
                                     <span class="exercise-tracking-category-label">{{ group.category }}</span>
                                     <span class="badge bg-light text-dark border">{{ group.exercises|length }}</span>
                                 </button>
-                                {% if group.category_id and perms.exercicios.change_categoriaexercicio %}
+                                {% if group.category_id %}
                                 <button
                                     class="exercise-tracking-category-color-button"
                                     type="button"

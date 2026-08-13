@@ -1,7 +1,7 @@
 import json
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -43,7 +43,6 @@ def update_sessao_exercicios(request, session_id):
 
 
 @login_required
-@permission_required("exercicios.change_categoriaexercicio", raise_exception=True)
 @require_POST
 def update_categoria_exercicio_color(request, pk):
     categoria = get_object_or_404(CategoriaExercicio.all_objects, pk=pk)

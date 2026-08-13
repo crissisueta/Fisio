@@ -2,7 +2,6 @@ import json
 from datetime import date, datetime
 from unittest.mock import patch
 
-from django.contrib.auth.models import Permission
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -181,7 +180,6 @@ class ExerciseTests(RegressionBaseTestCase):
 
     def test_category_color_can_be_updated_from_monthly_tracking(self):
         user = self.create_user()
-        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
         categoria = self.create_categoria(nome="Barril")
         self.client.force_login(user)
 
@@ -198,7 +196,6 @@ class ExerciseTests(RegressionBaseTestCase):
 
     def test_category_color_endpoint_rejects_invalid_color(self):
         user = self.create_user()
-        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
         categoria = self.create_categoria(nome="Barril")
         self.client.force_login(user)
 
@@ -368,7 +365,6 @@ class ExerciseTests(RegressionBaseTestCase):
     @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_detail_injects_presented_monthly_tracking_for_requested_month(self, _mock_localdate):
         user = self.create_user()
-        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
         categoria = self.create_categoria(nome="Controle", cor="#23A455")
