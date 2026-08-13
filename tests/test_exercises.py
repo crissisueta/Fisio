@@ -382,6 +382,7 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertContains(response, "Controle no detalhe")
         self.assertContains(response, "data-exercise-category-color-button")
         self.assertContains(response, "exercise-tracking-category-side-cell")
+        self.assertContains(response, "requestFullscreen")
         self.assertContains(response, "#23A455")
         self.assertContains(response, "X")
 

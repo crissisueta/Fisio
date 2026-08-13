@@ -580,6 +580,47 @@
         }
     }
 
+    function getBrowserFullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    function callFullscreenMethod(owner, methodName) {
+        if (!owner || typeof owner[methodName] !== 'function') {
+            return;
+        }
+        try {
+            var result = owner[methodName]();
+            if (result && typeof result.catch === 'function') {
+                result.catch(function () { return; });
+            }
+        } catch (error) {
+            return;
+        }
+    }
+
+    function requestBrowserFullscreen() {
+        if (getBrowserFullscreenElement()) {
+            return;
+        }
+        var target = document.documentElement;
+        if (target.requestFullscreen) {
+            callFullscreenMethod(target, 'requestFullscreen');
+            return;
+        }
+        callFullscreenMethod(target, 'webkitRequestFullscreen');
+    }
+
+    function exitBrowserFullscreen() {
+        if (!getBrowserFullscreenElement()) {
+            return;
+        }
+        if (document.exitFullscreen) {
+            callFullscreenMethod(document, 'exitFullscreen');
+            return;
+        }
+        callFullscreenMethod(document, 'webkitExitFullscreen');
+    }
+
     function setExerciseTrackingExpanded(card, button, expanded) {
         card.classList.toggle('is-expanded', expanded);
         document.body.classList.toggle('exercise-tracking-expanded', expanded);
@@ -607,15 +648,30 @@
             if (!card) {
                 return;
             }
-            setExerciseTrackingExpanded(card, button, !card.classList.contains('is-expanded'));
+            var expanded = !card.classList.contains('is-expanded');
+            setExerciseTrackingExpanded(card, button, expanded);
+            if (expanded) {
+                requestBrowserFullscreen();
+            } else {
+                exitBrowserFullscreen();
+            }
         });
     });
+
+    function syncExerciseTrackingFullscreenState() {
+        if (!getBrowserFullscreenElement()) {
+            collapseExpandedExerciseTrackingCards();
+        }
+    }
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
             collapseExpandedExerciseTrackingCards();
+            exitBrowserFullscreen();
         }
     });
+    document.addEventListener('fullscreenchange', syncExerciseTrackingFullscreenState);
+    document.addEventListener('webkitfullscreenchange', syncExerciseTrackingFullscreenState);
 
     document.querySelectorAll('[data-exercise-tracking-toggle]').forEach(function (button) {
         button.addEventListener('click', function () {
