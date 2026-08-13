@@ -1,5 +1,9 @@
+import json
+
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
+from django.core.exceptions import ValidationError
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.decorators.http import require_POST
@@ -36,6 +40,43 @@ def update_sessao_exercicios(request, session_id):
     assign_exercises_to_session(sessao, list(form.cleaned_data["exercicios"]))
     messages.success(request, f"Exercícios da sessão {sessao.numero or '-'} atualizados com sucesso.")
     return redirect(f"{reverse('procedure-detail', kwargs={'pk': procedimento.pk})}#sessao-{sessao.pk}")
+
+
+@login_required
+@permission_required("exercicios.change_categoriaexercicio", raise_exception=True)
+@require_POST
+def update_categoria_exercicio_color(request, pk):
+    categoria = get_object_or_404(CategoriaExercicio.all_objects, pk=pk)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError
+        color = str(payload.get("color") or "").strip().upper()
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "Informe uma cor válida."}, status=400)
+
+    categoria.cor = color
+    try:
+        categoria.full_clean()
+    except ValidationError as exc:
+        return JsonResponse({"success": False, "error": _validation_error_text(exc)}, status=400)
+
+    categoria.save(update_fields=["cor"])
+    log_activity(
+        user=request.user,
+        event_type="admin.exercise_category.color_updated",
+        message=f"alterou a cor da categoria de exercício {categoria.nome}",
+        level=ActivityLog.LEVEL_INFO,
+        metadata={"exercise_category_id": categoria.pk, "color": categoria.cor},
+    )
+    return JsonResponse({"success": True, "category_id": categoria.pk, "color": categoria.cor})
+
+
+def _validation_error_text(exc: ValidationError) -> str:
+    if hasattr(exc, "message_dict"):
+        return " ".join(message for messages in exc.message_dict.values() for message in messages)
+    return " ".join(exc.messages)
 
 
 class CategoriaExercicioListView(InternalPermissionMixin, ListView):

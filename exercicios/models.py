@@ -1,3 +1,4 @@
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -41,6 +42,17 @@ class CategoriaExercicio(SoftDeleteModel, models.Model):
 
     nome = models.CharField(max_length=100, unique=True)
     descricao = models.TextField(blank=True)
+    cor = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        validators=[
+            RegexValidator(
+                regex=r"^#[0-9A-Fa-f]{6}$",
+                message="Informe uma cor hexadecimal no formato #RRGGBB.",
+            )
+        ],
+    )
 
     class Meta:
         db_table = "forms_categoriaexercicio"

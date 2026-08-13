@@ -1,9 +1,9 @@
 :root {
-    --app-primary: #0d6efd;
-    --app-primary-rgb: 13, 110, 253;
-    --app-primary-hover: #0b5ed7;
-    --app-primary-hover-rgb: 11, 94, 215;
-    --app-primary-active: #0a58ca;
+    --app-primary: #0f9d58;
+    --app-primary-rgb: 15, 157, 88;
+    --app-primary-hover: #0c8048;
+    --app-primary-hover-rgb: 12, 128, 72;
+    --app-primary-active: #0a6f3e;
     --app-primary-contrast: #fff;
 
     --bs-primary: var(--app-primary);
@@ -24,6 +24,25 @@
 
 .border-primary {
     border-color: var(--app-primary) !important;
+}
+
+.alert-primary {
+    --bs-alert-color: #075c34;
+    --bs-alert-bg: #dff5e9;
+    --bs-alert-border-color: #b7e8cf;
+    --bs-alert-link-color: #064b2b;
+}
+
+.table-primary {
+    --bs-table-color: #073f25;
+    --bs-table-bg: #dff5e9;
+    --bs-table-border-color: #b7e8cf;
+    --bs-table-striped-bg: #d2eedf;
+    --bs-table-striped-color: #073f25;
+    --bs-table-active-bg: #c4e8d4;
+    --bs-table-active-color: #073f25;
+    --bs-table-hover-bg: #caebda;
+    --bs-table-hover-color: #073f25;
 }
 
 .btn-primary {
@@ -125,7 +144,7 @@
     left: 0;
     z-index: 1080;
     transform: translateX(calc(-100% + 0.55rem));
-    border: 1px solid rgba(13, 110, 253, 0.2);
+    border: 1px solid rgba(var(--app-primary-rgb), 0.2);
     border-left: 0;
     border-radius: 0 0.35rem 0.35rem 0;
     background: rgba(255, 255, 255, 0.9);
@@ -184,7 +203,7 @@
     right: 0.75rem;
     bottom: 5rem;
     width: min(22rem, calc(100vw - 1.5rem));
-    border: 1px solid rgba(13, 110, 253, 0.18);
+    border: 1px solid rgba(var(--app-primary-rgb), 0.18);
     border-radius: 0.5rem;
     background: #fff;
     padding: 0.85rem;

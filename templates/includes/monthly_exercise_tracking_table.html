@@ -37,6 +37,7 @@
             <table class="table table-sm table-bordered align-middle exercise-tracking-table">
                 <thead>
                     <tr>
+                        <th scope="col" class="exercise-tracking-category-side-col" aria-hidden="true"></th>
                         <th scope="col" class="exercise-tracking-name-col">Exercício</th>
                         {% for day in exercise_tracking.days %}
                         <th
@@ -66,19 +67,51 @@
                 </thead>
                 <tbody>
                     {% for group in exercise_tracking.groups %}
-                    <tr class="exercise-tracking-category-row">
+                    <tr
+                        class="exercise-tracking-category-row"
+                        data-exercise-category-id="{{ group.category_id }}"
+                        {% if group.category_color %}style="--exercise-category-color: {{ group.category_color }};"{% endif %}
+                    >
+                        <th class="exercise-tracking-category-side-col exercise-tracking-category-side-header-cell" aria-hidden="true"></th>
                         <th class="exercise-tracking-name-col exercise-tracking-category-name-cell" scope="colgroup">
-                            <button
-                                class="exercise-tracking-category-toggle"
-                                type="button"
-                                data-exercise-tracking-toggle
-                                data-target="exercise-tracking-group-{{ forloop.counter }}"
-                                aria-expanded="true"
-                            >
-                                <span class="exercise-tracking-category-caret" aria-hidden="true">v</span>
-                                <span>{{ group.category }}</span>
-                                <span class="badge bg-light text-dark border">{{ group.exercises|length }}</span>
-                            </button>
+                            <div class="exercise-tracking-category-toolbar">
+                                <button
+                                    class="exercise-tracking-category-toggle"
+                                    type="button"
+                                    data-exercise-tracking-toggle
+                                    data-target="exercise-tracking-group-{{ forloop.counter }}"
+                                    aria-expanded="true"
+                                >
+                                    <span class="exercise-tracking-category-caret" aria-hidden="true">v</span>
+                                    <span class="exercise-tracking-category-label">{{ group.category }}</span>
+                                    <span class="badge bg-light text-dark border">{{ group.exercises|length }}</span>
+                                </button>
+                                {% if group.category_id and perms.exercicios.change_categoriaexercicio %}
+                                <button
+                                    class="exercise-tracking-category-color-button"
+                                    type="button"
+                                    data-exercise-category-color-button
+                                    data-category-id="{{ group.category_id }}"
+                                    aria-label="Escolher cor de {{ group.category }}"
+                                    title="Escolher cor de {{ group.category }}"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"></path>
+                                        <path d="m5 2 5 5"></path>
+                                        <path d="M2 13h15"></path>
+                                        <path d="M22 20a2 2 0 1 1-4 0c0-1.2 2-3.5 2-3.5s2 2.3 2 3.5Z"></path>
+                                    </svg>
+                                </button>
+                                <input
+                                    class="visually-hidden"
+                                    type="color"
+                                    value="{{ group.category_color|default:'#f1f3f5' }}"
+                                    data-exercise-category-color-input
+                                    data-category-id="{{ group.category_id }}"
+                                    data-update-color-url="{% url 'exercise-category-color-update' group.category_id %}"
+                                >
+                                {% endif %}
+                            </div>
                         </th>
                         <td
                             class="exercise-tracking-category-fill"
@@ -98,6 +131,17 @@
                     </tr>
                     {% for exercise in group.exercises %}
                     <tr data-exercise-tracking-row="exercise-tracking-group-{{ forloop.parentloop.counter }}">
+                        {% if forloop.first %}
+                        <th
+                            class="exercise-tracking-category-side-col exercise-tracking-category-side-cell"
+                            scope="rowgroup"
+                            rowspan="{{ group.exercises|length }}"
+                            data-exercise-category-id="{{ group.category_id }}"
+                            {% if group.category_color %}style="--exercise-category-color: {{ group.category_color }};"{% endif %}
+                        >
+                            <span class="exercise-tracking-category-side-label">{{ group.category }}</span>
+                        </th>
+                        {% endif %}
                         <th scope="row" class="exercise-tracking-name-col {{ exercise.name_class }}">{{ exercise.name }}</th>
                         {% for day in exercise.days %}
                         <td

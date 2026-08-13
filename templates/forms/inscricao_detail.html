@@ -32,6 +32,7 @@
         min-height: 0;
     }
     .exercise-tracking-table {
+        --exercise-category-side-width: 28px;
         font-size: 0.84rem;
         min-width: max-content;
         width: max-content;
@@ -51,24 +52,83 @@
         min-width: 185px;
         text-align: left !important;
         position: sticky;
-        left: 0;
+        left: var(--exercise-category-side-width);
         background: #fff;
         overflow-wrap: anywhere;
         white-space: normal !important;
         width: 185px;
-        z-index: 1;
+        z-index: 2;
+    }
+    .exercise-tracking-category-side-col {
+        --exercise-category-color: #f1f3f5;
+        --exercise-category-text-color: #111;
+        background: #fff;
+        left: 0;
+        max-width: var(--exercise-category-side-width);
+        min-width: var(--exercise-category-side-width);
+        padding: 0 !important;
+        position: sticky;
+        width: var(--exercise-category-side-width);
+        z-index: 3;
+    }
+    .exercise-tracking-table thead .exercise-tracking-category-side-col,
+    .exercise-tracking-table thead .exercise-tracking-name-col {
+        z-index: 5;
+    }
+    .exercise-tracking-category-side-header-cell {
+        --bs-table-bg: color-mix(in srgb, var(--exercise-category-color) 86%, #fff);
+        background-color: color-mix(in srgb, var(--exercise-category-color) 86%, #fff) !important;
+        box-shadow: inset 5px 0 0 var(--exercise-category-color), 0 0 0 1px color-mix(in srgb, var(--exercise-category-color) 90%, #111) !important;
+        z-index: 4;
+    }
+    .exercise-tracking-category-side-cell {
+        --bs-table-bg: var(--exercise-category-color);
+        --bs-table-color: var(--exercise-category-text-color, #111);
+        background-color: var(--exercise-category-color) !important;
+        box-shadow: inset 5px 0 0 color-mix(in srgb, var(--exercise-category-color) 88%, #000), inset -1px 0 0 rgba(0, 0, 0, 0.28), 0 0 12px color-mix(in srgb, var(--exercise-category-color) 72%, transparent) !important;
+        color: var(--exercise-category-text-color, #111);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1;
+        text-align: center !important;
+        text-transform: uppercase;
+        vertical-align: top !important;
+    }
+    .exercise-tracking-category-side-label {
+        display: inline-flex;
+        justify-content: center;
+        margin: 0 auto;
+        max-height: calc(100vh - 160px);
+        overflow: hidden;
+        padding: 8px 0;
+        position: sticky;
+        text-overflow: ellipsis;
+        top: 34px;
+        transform: rotate(180deg);
+        white-space: nowrap;
+        writing-mode: vertical-rl;
+    }
+    .exercise-tracking-category-row {
+        --exercise-category-color: #f1f3f5;
+        --exercise-category-text-color: #111;
     }
     .exercise-tracking-category-row th {
-        background: #f1f3f5;
-        color: #495057;
+        background: color-mix(in srgb, var(--exercise-category-color) 86%, #fff);
+        color: var(--exercise-category-text-color, #111);
         font-size: 0.72rem;
         letter-spacing: 0;
-        text-align: left !important;
+        text-align: center !important;
         text-transform: uppercase;
     }
     .exercise-tracking-category-name-cell {
-        background: #f1f3f5;
+        background: color-mix(in srgb, var(--exercise-category-color) 86%, #fff);
+        box-shadow: inset 5px 0 0 color-mix(in srgb, var(--exercise-category-color) 88%, #000);
+        text-align: left !important;
         z-index: 2;
+    }
+    .exercise-tracking-table tbody tr:not(.exercise-tracking-category-row) th.exercise-tracking-name-col {
+        font-weight: 400;
     }
     .exercise-tracking-category-fill {
         background: #f1f3f5;
@@ -76,11 +136,21 @@
         font-size: 0.72rem;
         font-weight: 700;
         overflow: hidden;
-        padding-left: 0.75rem !important;
-        text-align: left !important;
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
+        text-align: center !important;
         text-overflow: ellipsis;
         text-transform: uppercase;
         white-space: nowrap;
+    }
+    .exercise-tracking-category-toolbar {
+        align-items: center;
+        display: flex;
+        gap: 6px;
+        justify-content: flex-start;
+        min-width: 0;
+        position: relative;
+        width: 100%;
     }
     .exercise-tracking-category-toggle {
         align-items: center;
@@ -88,13 +158,16 @@
         border: 0;
         color: inherit;
         display: inline-flex;
+        flex: 0 1 auto;
         font: inherit;
         font-weight: 700;
         gap: 8px;
+        justify-content: flex-start;
+        max-width: calc(100% - 34px);
+        min-width: 0;
         padding: 2px 0;
         text-align: left;
         text-transform: inherit;
-        width: 100%;
     }
     .exercise-tracking-category-toggle:hover,
     .exercise-tracking-category-toggle:focus {
@@ -104,6 +177,33 @@
         display: inline-flex;
         justify-content: center;
         width: 14px;
+    }
+    .exercise-tracking-category-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .exercise-tracking-category-color-button {
+        align-items: center;
+        background: var(--exercise-category-color);
+        border: 1px solid color-mix(in srgb, var(--exercise-category-color) 80%, #000);
+        border-radius: 6px;
+        color: var(--exercise-category-text-color, #111);
+        display: inline-flex;
+        flex: 0 0 26px;
+        height: 26px;
+        justify-content: center;
+        padding: 0;
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 26px;
+    }
+    .exercise-tracking-category-color-button:hover,
+    .exercise-tracking-category-color-button:focus {
+        box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--exercise-category-color), 0 0 14px color-mix(in srgb, var(--exercise-category-color) 84%, transparent);
+        outline: 0;
     }
     .exercise-tracking-expand-button {
         min-width: 74px;
@@ -166,8 +266,8 @@
         border-left: 3px solid #495057 !important;
     }
     .exercise-tracking-category-row .exercise-tracking-category-fill {
-        background: #f1f3f5;
-        color: #6c757d;
+        background: color-mix(in srgb, var(--exercise-category-color) 86%, #fff);
+        color: var(--exercise-category-text-color, #111);
     }
     .exercise-color-help-button {
         align-items: center;
@@ -203,6 +303,9 @@
         .exercise-tracking-table-wrap {
             height: 70vh;
             max-height: 70vh;
+        }
+        .exercise-tracking-table {
+            --exercise-category-side-width: 24px;
         }
         .exercise-tracking-name-col {
             max-width: 135px;
@@ -607,6 +710,96 @@
         syncVisibleMonthBoundaries(table);
     }
 
+    function hexToRgb(color) {
+        var hex = String(color || '').trim().replace('#', '');
+        if (hex.length === 3) {
+            hex = hex.split('').map(function (character) { return character + character; }).join('');
+        }
+        if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+            return null;
+        }
+        return {
+            red: parseInt(hex.slice(0, 2), 16),
+            green: parseInt(hex.slice(2, 4), 16),
+            blue: parseInt(hex.slice(4, 6), 16),
+        };
+    }
+
+    function readableCategoryTextColor(color) {
+        var rgb = hexToRgb(color);
+        if (!rgb) {
+            return '#111';
+        }
+        var luminance = ((0.2126 * rgb.red) + (0.7152 * rgb.green) + (0.0722 * rgb.blue)) / 255;
+        return luminance < 0.5 ? '#fff' : '#111';
+    }
+
+    function updateCategoryColorStyles(card, categoryId, color) {
+        var selectedColor = color || '#f1f3f5';
+        var textColor = readableCategoryTextColor(selectedColor);
+        card.querySelectorAll('[data-exercise-category-id]').forEach(function (element) {
+            if (element.dataset.exerciseCategoryId !== String(categoryId)) {
+                return;
+            }
+            element.style.setProperty('--exercise-category-color', selectedColor);
+            element.style.setProperty('--exercise-category-text-color', textColor);
+        });
+        card.querySelectorAll('[data-exercise-category-color-input]').forEach(function (input) {
+            if (input.dataset.categoryId !== String(categoryId)) {
+                return;
+            }
+            input.value = selectedColor;
+        });
+    }
+
+    function initializeCategoryColorStyles(card) {
+        var initialized = {};
+        card.querySelectorAll('[data-exercise-category-id]').forEach(function (element) {
+            var categoryId = element.dataset.exerciseCategoryId;
+            if (!categoryId || initialized[categoryId]) {
+                return;
+            }
+            var selectedColor = getComputedStyle(element).getPropertyValue('--exercise-category-color').trim() || '#f1f3f5';
+            updateCategoryColorStyles(card, categoryId, selectedColor);
+            initialized[categoryId] = true;
+        });
+    }
+
+    function saveCategoryColor(input) {
+        var card = input.closest('[data-exercise-tracking-card]');
+        if (!card || !input.dataset.updateColorUrl) {
+            return;
+        }
+
+        input.disabled = true;
+        fetch(input.dataset.updateColorUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': card.dataset.csrfToken || getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ color: input.value }),
+        })
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    if (!response.ok || !payload.success) {
+                        throw new Error(payload.error || 'Não foi possível salvar a cor.');
+                    }
+                    return payload;
+                });
+            })
+            .then(function (payload) {
+                updateCategoryColorStyles(card, String(payload.category_id), payload.color);
+            })
+            .catch(function (error) {
+                alert(error.message);
+            })
+            .finally(function () {
+                input.disabled = false;
+            });
+    }
+
     function markExerciseCell(button) {
         var cell = button.closest('.exercise-tracking-day-cell');
         var card = button.closest('[data-exercise-tracking-card]');
@@ -667,12 +860,29 @@
     }
 
     document.querySelectorAll('[data-exercise-tracking-card]').forEach(function (card) {
+        initializeCategoryColorStyles(card);
+
         var input = card.querySelector('[data-hide-empty-past-exercise-days]');
         if (input) {
             input.addEventListener('change', function () {
                 applyEmptyPastDayVisibility(card);
             });
         }
+
+        card.querySelectorAll('[data-exercise-category-color-button]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var input = card.querySelector('[data-exercise-category-color-input][data-category-id="' + button.dataset.categoryId + '"]');
+                if (input) {
+                    input.click();
+                }
+            });
+        });
+
+        card.querySelectorAll('[data-exercise-category-color-input]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                saveCategoryColor(input);
+            });
+        });
 
         card.querySelectorAll('[data-exercise-tracking-cell]').forEach(function (button) {
             button.addEventListener('click', function () {

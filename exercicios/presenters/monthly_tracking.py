@@ -36,6 +36,7 @@ def present_monthly_tracking_table(
             {
                 "category_id": group.category_id,
                 "category": group.category_name,
+                "category_color": group.category_color,
                 "exercises": [
                     {
                         "exercise_id": exercise.exercise_id,

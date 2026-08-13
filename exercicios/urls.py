@@ -9,6 +9,7 @@ from .views import (
     ExercicioCatalogoDeleteView,
     ExercicioCatalogoListView,
     ExercicioCatalogoUpdateView,
+    update_categoria_exercicio_color,
     update_sessao_exercicios,
 )
 
@@ -21,6 +22,7 @@ urlpatterns = [
     path("categorias-exercicios/", CategoriaExercicioListView.as_view(), name="exercise-category-list"),
     path("categorias-exercicios/nova/", CategoriaExercicioCreateView.as_view(), name="exercise-category-create"),
     path("categorias-exercicios/<int:pk>/editar/", CategoriaExercicioUpdateView.as_view(), name="exercise-category-update"),
+    path("categorias-exercicios/<int:pk>/cor/", update_categoria_exercicio_color, name="exercise-category-color-update"),
     path("categorias-exercicios/<int:pk>/deletar/", CategoriaExercicioDeleteView.as_view(), name="exercise-category-delete"),
     path("sessoes/<int:session_id>/exercicios/", update_sessao_exercicios, name="session-exercise-update"),
 ]

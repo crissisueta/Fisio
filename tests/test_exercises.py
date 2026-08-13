@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime
 from unittest.mock import patch
 
+from django.contrib.auth.models import Permission
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -159,7 +160,7 @@ class ExerciseTests(RegressionBaseTestCase):
     def test_monthly_tracking_uses_procedure_exercise_order(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
-        estabilizadores = self.create_categoria(nome="Estabilizadores")
+        estabilizadores = self.create_categoria(nome="Estabilizadores", cor="#F5C542")
         barril = self.create_categoria(nome="Barril")
         cadeira = self.create_categoria(nome="Cadeira")
         bosu = self.create_exercicio(nome="Bosu", categoria=estabilizadores)
@@ -175,7 +176,41 @@ class ExerciseTests(RegressionBaseTestCase):
         table = build_monthly_exercise_tracking_table(paciente, "2026-05")
 
         self.assertEqual([group.category_name for group in table.groups], ["Estabilizadores", "Barril", "Cadeira"])
+        self.assertEqual(table.groups[0].category_color, "#F5C542")
         self.assertEqual([exercise.name for exercise in table.groups[0].exercises], ["Bosu", "Bola"])
+
+    def test_category_color_can_be_updated_from_monthly_tracking(self):
+        user = self.create_user()
+        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
+        categoria = self.create_categoria(nome="Barril")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("exercise-category-color-update", args=[categoria.pk]),
+            data=json.dumps({"color": "#3a7bd5"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"success": True, "category_id": categoria.pk, "color": "#3A7BD5"})
+        categoria.refresh_from_db()
+        self.assertEqual(categoria.cor, "#3A7BD5")
+
+    def test_category_color_endpoint_rejects_invalid_color(self):
+        user = self.create_user()
+        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
+        categoria = self.create_categoria(nome="Barril")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("exercise-category-color-update", args=[categoria.pk]),
+            data=json.dumps({"color": "blue"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        categoria.refresh_from_db()
+        self.assertEqual(categoria.cor, "")
 
     @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_mark_exercise_day_creates_completed_session_and_marks_table(self, _mock_localdate):
@@ -333,9 +368,11 @@ class ExerciseTests(RegressionBaseTestCase):
     @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_patient_detail_injects_presented_monthly_tracking_for_requested_month(self, _mock_localdate):
         user = self.create_user()
+        user.user_permissions.add(Permission.objects.get(codename="change_categoriaexercicio"))
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
-        exercicio = self.create_exercicio(nome="Controle no detalhe")
+        categoria = self.create_categoria(nome="Controle", cor="#23A455")
+        exercicio = self.create_exercicio(nome="Controle no detalhe", categoria=categoria)
         ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=exercicio)
         session = self.create_completed_session(procedimento, datetime(2026, 4, 10, 9, 0))
         SessaoExercicio.objects.create(sessao=session, exercicio=exercicio)
@@ -347,6 +384,9 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertEqual(response.context["exercise_tracking"]["month_param"], "2026-04")
         self.assertContains(response, "Controle Mensal de Exercícios")
         self.assertContains(response, "Controle no detalhe")
+        self.assertContains(response, "data-exercise-category-color-button")
+        self.assertContains(response, "exercise-tracking-category-side-cell")
+        self.assertContains(response, "#23A455")
         self.assertContains(response, "X")
 
     def test_patient_exercise_note_can_be_saved_beside_patient_name(self):

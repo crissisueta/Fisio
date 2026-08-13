@@ -68,6 +68,7 @@ class MonthlyExerciseRow:
 class MonthlyExerciseGroup:
     category_id: int | None
     category_name: str
+    category_color: str
     exercises: list[MonthlyExerciseRow]
 
 
@@ -161,7 +162,7 @@ def build_monthly_exercise_tracking_table(
     last_performed_by_exercise = _get_last_performed_dates_by_exercise(paciente)
     exercise_universe = _get_exercise_universe(paciente)
 
-    grouped_rows: dict[tuple[str, int | None], list[MonthlyExerciseRow]] = {}
+    grouped_rows: dict[tuple[str, int | None, str], list[MonthlyExerciseRow]] = {}
     for exercise_data in sorted(exercise_universe.values(), key=_exercise_display_order):
         exercise_id = exercise_data["exercise_id"]
         marked_dates = marked_dates_by_exercise.get(exercise_id, set())
@@ -188,12 +189,21 @@ def build_monthly_exercise_tracking_table(
             last_performed=last_performed,
             performed_in_last_session=performed_in_last_session,
         )
-        group_key = (exercise_data["category_name"], exercise_data["category_id"])
+        group_key = (
+            exercise_data["category_name"],
+            exercise_data["category_id"],
+            exercise_data["category_color"],
+        )
         grouped_rows.setdefault(group_key, []).append(row)
 
     groups = [
-        MonthlyExerciseGroup(category_id=category_id, category_name=category_name, exercises=rows)
-        for (category_name, category_id), rows in grouped_rows.items()
+        MonthlyExerciseGroup(
+            category_id=category_id,
+            category_name=category_name,
+            category_color=category_color,
+            exercises=rows,
+        )
+        for (category_name, category_id, category_color), rows in grouped_rows.items()
     ]
 
     return MonthlyExerciseTrackingTable(
@@ -684,6 +694,7 @@ def _get_exercise_universe(paciente: Paciente) -> dict[int, dict]:
             "exercicio__nome",
             "exercicio__categoria_id",
             "exercicio__categoria__nome",
+            "exercicio__categoria__cor",
             "ordem",
         )
         .order_by("procedimento__created_at", "procedimento_id", "ordem", "created_at", "pk")
@@ -702,6 +713,7 @@ def _get_exercise_universe(paciente: Paciente) -> dict[int, dict]:
             "exercicio__nome",
             "exercicio__categoria_id",
             "exercicio__categoria__nome",
+            "exercicio__categoria__cor",
             "ordem",
         )
         .order_by("sessao__data_hora", "sessao_id", "ordem", "created_at", "pk")
@@ -727,6 +739,7 @@ def _add_exercise_data(exercises: dict[int, dict], row: dict, display_order: int
         "name": row["exercicio__nome"],
         "category_id": row["exercicio__categoria_id"],
         "category_name": row["exercicio__categoria__nome"] or "Sem categoria",
+        "category_color": row["exercicio__categoria__cor"] or "",
         "display_order": display_order,
         "exercise_order": row["ordem"] or display_order,
     }
