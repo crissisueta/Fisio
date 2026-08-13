@@ -162,10 +162,7 @@ def build_monthly_exercise_tracking_table(
     exercise_universe = _get_exercise_universe(paciente)
 
     grouped_rows: dict[tuple[str, int | None], list[MonthlyExerciseRow]] = {}
-    for exercise_data in sorted(
-        exercise_universe.values(),
-        key=lambda item: (item["category_name"].lower(), item["name"].lower(), item["exercise_id"]),
-    ):
+    for exercise_data in sorted(exercise_universe.values(), key=_exercise_display_order):
         exercise_id = exercise_data["exercise_id"]
         marked_dates = marked_dates_by_exercise.get(exercise_id, set())
         last_performed = last_performed_by_exercise.get(exercise_id)
@@ -687,8 +684,9 @@ def _get_exercise_universe(paciente: Paciente) -> dict[int, dict]:
             "exercicio__nome",
             "exercicio__categoria_id",
             "exercicio__categoria__nome",
+            "ordem",
         )
-        .distinct()
+        .order_by("procedimento__created_at", "procedimento_id", "ordem", "created_at", "pk")
     )
     session_rows = (
         SessaoExercicio.all_objects.filter(
@@ -704,19 +702,22 @@ def _get_exercise_universe(paciente: Paciente) -> dict[int, dict]:
             "exercicio__nome",
             "exercicio__categoria_id",
             "exercicio__categoria__nome",
+            "ordem",
         )
-        .distinct()
+        .order_by("sessao__data_hora", "sessao_id", "ordem", "created_at", "pk")
     )
 
-    for row in procedure_rows:
-        _add_exercise_data(exercises, row)
-    for row in session_rows:
-        _add_exercise_data(exercises, row)
+    for display_order, row in enumerate(procedure_rows, start=1):
+        _add_exercise_data(exercises, row, display_order)
+
+    session_display_start = len(exercises) + 1
+    for display_offset, row in enumerate(session_rows):
+        _add_exercise_data(exercises, row, session_display_start + display_offset)
 
     return exercises
 
 
-def _add_exercise_data(exercises: dict[int, dict], row: dict) -> None:
+def _add_exercise_data(exercises: dict[int, dict], row: dict, display_order: int) -> None:
     exercise_id = row["exercicio_id"]
     if exercise_id in exercises:
         return
@@ -726,7 +727,19 @@ def _add_exercise_data(exercises: dict[int, dict], row: dict) -> None:
         "name": row["exercicio__nome"],
         "category_id": row["exercicio__categoria_id"],
         "category_name": row["exercicio__categoria__nome"] or "Sem categoria",
+        "display_order": display_order,
+        "exercise_order": row["ordem"] or display_order,
     }
+
+
+def _exercise_display_order(item: dict) -> tuple[int, int, str, str, int]:
+    return (
+        item["display_order"],
+        item["exercise_order"],
+        item["category_name"].lower(),
+        item["name"].lower(),
+        item["exercise_id"],
+    )
 
 
 def _get_color_state(

@@ -156,6 +156,28 @@ class ExerciseTests(RegressionBaseTestCase):
         self.assertLessEqual(len(captured), 8)
 
     @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
+    def test_monthly_tracking_uses_procedure_exercise_order(self, _mock_localdate):
+        paciente = self.create_paciente()
+        procedimento = self.create_procedimento(paciente=paciente)
+        estabilizadores = self.create_categoria(nome="Estabilizadores")
+        barril = self.create_categoria(nome="Barril")
+        cadeira = self.create_categoria(nome="Cadeira")
+        bosu = self.create_exercicio(nome="Bosu", categoria=estabilizadores)
+        bola = self.create_exercicio(nome="Bola", categoria=estabilizadores)
+        cavalo = self.create_exercicio(nome="A cavalo", categoria=barril)
+        apoio = self.create_exercicio(nome="Apoio em pé", categoria=cadeira)
+
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=bosu, ordem=1)
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=bola, ordem=2)
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=cavalo, ordem=3)
+        ProcedimentoExercicio.objects.create(procedimento=procedimento, exercicio=apoio, ordem=4)
+
+        table = build_monthly_exercise_tracking_table(paciente, "2026-05")
+
+        self.assertEqual([group.category_name for group in table.groups], ["Estabilizadores", "Barril", "Cadeira"])
+        self.assertEqual([exercise.name for exercise in table.groups[0].exercises], ["Bosu", "Bola"])
+
+    @patch("exercicios.services.monthly_tracking.timezone.localdate", return_value=date(2026, 5, 6))
     def test_mark_exercise_day_creates_completed_session_and_marks_table(self, _mock_localdate):
         paciente = self.create_paciente()
         procedimento = self.create_procedimento(paciente=paciente)
